@@ -8,7 +8,7 @@ espressoCore = "3.6.1"
 lifecycle = "2.9.0"
 activityCompose = "1.10.1"
 composeBom = "2024.04.01"
-vehicleSdk = "2.3.1"
+vehicleSdk = "2.3.2"
 kotlinReflect = "2.0.0"
 
 [libraries]

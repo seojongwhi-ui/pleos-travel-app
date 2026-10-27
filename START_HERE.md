@@ -1,7 +1,7 @@
 # 여행 앱 공모전 프로젝트
 
 Pleos Vehicle SDK 공식 샘플을 바탕으로 차량 상태 데이터를 활용하는 여행 앱을 준비합니다.
-현재는 개발 환경과 기존 코드를 분석하는 단계입니다. 여행 서비스 기능은 아직 구현하지 않았습니다.
+현재는 개발 환경 점검을 마치고 기존 샘플의 상태 조회를 검증한 단계입니다. 여행 서비스 기능은 아직 구현하지 않았습니다.
 
 - 원본 저장소: https://github.com/Pleos-Playground/pleos-sample-vehicle-app
 - 원본 기준 커밋: `959981d960ec71144accb27af5ae5d341e72a644`
@@ -11,28 +11,29 @@ Pleos Vehicle SDK 공식 샘플을 바탕으로 차량 상태 데이터를 활�
 
 ## 현재 확인 결과
 
-2026-10-27 기준으로 공식 샘플의 Kotlin 코드, Manifest, Gradle 설정은 원본 그대로 보존했습니다.
-추가한 것은 이 안내, 분석 문서, 빌드 결과물 및 개인 설정의 업로드를 막는 `.gitignore`입니다.
+2026-10-27에 Vehicle SDK 의존성을 `2.3.1`에서 공식 배포 버전인 `2.3.2`로 수정했습니다.
+Windows의 한글 프로젝트 경로에서 빌드할 수 있도록 `gradle.properties`에 `android.overridePathCheck=true`도 설정했습니다.
+공식 샘플의 Kotlin 코드와 Manifest는 변경하지 않았습니다.
 
-원본 상태의 빌드는 성공하지 않았습니다.
+수정 후 확인한 결과입니다.
 
-1. Windows에서 한글 경로를 검사하는 Android Gradle Plugin 오류가 발생했습니다.
-   프로젝트 파일 수정 없이 명령행 옵션 `-Pandroid.overridePathCheck=true`로 검사 단계를 통과했습니다.
-   이 옵션이 모든 도구의 한글 경로 호환성을 보장하는 것은 아닙니다.
-2. 원본 `gradle/libs.versions.toml`은 Vehicle SDK `2.3.1`을 지정합니다.
-   해당 버전은 현재 공식 Maven에서 찾을 수 없어 의존성 해석에 실패했습니다.
-   README와 최신 공식 문서는 `2.3.2`를 안내합니다. SDK 버전은 아직 변경하지 않았습니다.
+- `assembleDebug` 성공. 별도 `-P` 옵션 없이도 한글 경로 검사 단계를 통과했습니다.
+- Pleos Connect 2.1.0 AVD에 debug APK 설치 및 샘플 앱 실행 성공.
+- 앱 화면에 `SDK 2.3.2`, `Vehicle Service 2.3.22` 표시.
+- Door Position의 `ROW_1_LEFT` 영역 지원 확인 성공: 읽기/쓰기 지원, 범위 `0..1`.
+- `getCurrentDoorPosition`의 실제 조회 결과 `0`을 화면에서 확인.
+- 검증 중 제어 요청이나 Listener 등록은 실행하지 않았습니다.
 
-JDK 17, Android SDK API 34/35, Build Tools 34/35와 Pleos Connect 2.1.0 AVD는 설치되어 있습니다.
-WHPX 가속도 사용 가능하지만, 이번 점검 시 실행 중인 ADB 기기는 없었습니다.
-앱 설치·화면 표시·실제 상태 조회 성공 여부는 아직 검증하지 않았습니다.
+초기 빌드 실패의 원인은 샘플에 지정된 `2.3.1`이 공식 Maven에서 HTTP 404로 응답한 것이었습니다.
+JDK 17, Android SDK API 34/35, Build Tools 34/35와 WHPX 가속을 사용해 위 결과를 확인했습니다.
+
+![SDK 2.3.2의 실제 Door Position 조회 결과](docs/images/sdk-2.3.2-door-read.png)
 
 ## 다음 개발 순서
 
-1. SDK 의존성 불일치를 별도 변경으로 해결하고 원본 샘플 빌드를 검증합니다.
-2. 기존 Door Position 예제로 상태 조회를 확인합니다.
-3. 문 열림 상태 하나를 읽기 전용 화면에 표시하고, 실패·미지원·값 없음 상태를 구분합니다.
-4. 여행 앱에 필요한 주행 시간·거리 등으로 조회 범위를 확장합니다.
+1. 문 열림 상태 하나를 읽기 전용 화면에 표시하고, 실패·미지원·값 없음 상태를 구분합니다.
+2. 여행 앱에 필요한 주행 시간·거리 등으로 조회 범위를 확장합니다.
 
 빌드 명령, 실제 API 이름과 권한, 오류 처리와 에뮬레이터 테스트 절차는 분석 문서에 정리했습니다.
-현재 APK는 생성되지 않았으며 제출용으로 서명된 release APK도 아직 없습니다.
+테스트 APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생성됩니다.
+이 APK는 debug 빌드이며 공모전 제출용 release APK는 아직 만들지 않았습니다.

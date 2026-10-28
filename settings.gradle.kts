@@ -23,3 +23,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "VehicleSampleApp"
 include(":app")
+include(":travel-preview")

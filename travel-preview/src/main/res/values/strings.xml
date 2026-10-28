@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">같이가 미리보기</string>
+    <color name="launcher_background">#D85E25</color>
+    <style name="Theme.TravelPreview" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#F2F5F8</item>
+    </style>
+</resources>

@@ -23,16 +23,16 @@ internal fun InAppJourneyScreen(page: String, wide: Boolean, enabled: Boolean, g
     // Every two-minute update opens the shared overview, including from a car-centered view.
     LaunchedEffect(convoy.revision) { overview = true }
     if (wide) {
-        Row(modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Row(modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             JourneyMapArea(overview, cameraRevision, enabled, { overview = true; cameraRevision++ },
                 { overview = false; cameraRevision++ }, Modifier.weight(1f).fillMaxHeight())
-            JourneyFeaturePanel(page, enabled, go, Modifier.width(340.dp).fillMaxHeight())
+            JourneyFeaturePanel(page, enabled, go, Modifier.width(400.dp).fillMaxHeight())
         }
     } else {
         Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             JourneyMapArea(overview, cameraRevision, enabled, { overview = true; cameraRevision++ },
                 { overview = false; cameraRevision++ }, Modifier.weight(1f).fillMaxWidth())
-            JourneyFeaturePanel(page, enabled, go, Modifier.fillMaxWidth().height(310.dp))
+            JourneyFeaturePanel(page, enabled, go, Modifier.fillMaxWidth().height(340.dp))
         }
     }
 }
@@ -42,32 +42,32 @@ private fun JourneyMapArea(overview: Boolean, cameraRevision: Int, enabled: Bool
     showAll: () -> Unit, showOurCar: () -> Unit, modifier: Modifier) {
     val convoy = LocalConvoy.current
     val live = LocalTripLive.current
-    Surface(modifier, shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+    Surface(modifier, shape = RoundedCornerShape(Pleos215.RadiusLarge), color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically) {
                 Column {
-                    Text("강릉, 바다 보러", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                    Text("세 가족이 같은 목적지를 향해", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("강릉, 바다 보러", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text("세 가족이 같은 목적지를 향해", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 AppBadge("일행 시연", warm = true)
             }
             RoadConvoyMap(overview, cameraRevision, enabled, Modifier.weight(1f))
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FilterChip(overview, showAll, enabled = enabled,
-                    label = { Text("일행 전체", fontSize = 22.sp) }, modifier = Modifier.heightIn(min = 76.dp))
-                FilterChip(!overview, showOurCar, enabled = enabled,
-                    label = { Text("우리 차 중심", fontSize = 22.sp) }, modifier = Modifier.heightIn(min = 76.dp))
+                PleosToggle(overview, showAll, enabled = enabled,
+                    label = { Text("일행 전체", style = MaterialTheme.typography.labelMedium) }, modifier = Modifier.heightIn(min = Pleos215.ButtonMedium))
+                PleosToggle(!overview, showOurCar, enabled = enabled,
+                    label = { Text("우리 차 중심", style = MaterialTheme.typography.labelMedium) }, modifier = Modifier.heightIn(min = Pleos215.ButtonMedium))
             }
             val locationMissing = convoy.useRealCar && (live.location.status != ReadStatus.READY || live.location.value?.isValid() != true)
             Text(when {
                 locationMissing -> "우리 차 위치 확인 불가 · ${live.location.message}"
                 convoy.useRealCar -> "우리 차: SDK 위치 · 일행 2대: 시연"
                 else -> "차량 3대: 로컬 시연 · 공유 서버 없음"
-            }, Modifier.padding(horizontal = 18.dp), fontSize = 18.sp,
+            }, Modifier.padding(horizontal = 18.dp), style = MaterialTheme.typography.labelSmall,
                 color = if (locationMissing) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
             Text("점선은 시연 이동선 · 실제 길 안내 아님", Modifier.padding(start = 18.dp, end = 18.dp, bottom = 14.dp),
-                fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -77,7 +77,7 @@ private fun JourneyFeaturePanel(page: String, enabled: Boolean, go: (String) -> 
     val live = LocalTripLive.current
     val convoy = LocalConvoy.current
     val actions = LocalTripActions.current
-    Surface(modifier, shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+    Surface(modifier, shape = RoundedCornerShape(Pleos215.RadiusLarge), color = MaterialTheme.colorScheme.surface) {
         key(page) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -94,16 +94,16 @@ private fun JourneyFeaturePanel(page: String, enabled: Boolean, go: (String) -> 
                         }
                         MutedText("남은 거리·시간은 기본 내비의 조회값입니다. 지도 점선과 별개입니다.")
                         SectionTitle("일행 시연 설정")
-                        FilterChip(convoy.automatic, convoy.toggleAutomatic, enabled = enabled,
-                            label = { Text("2분 자동", fontSize = 22.sp) }, modifier = Modifier.heightIn(min = 76.dp))
-                        Text(if (convoy.automatic) "다음 갱신 ${convoy.secondsUntilUpdate}초" else "수동 갱신", fontSize = 21.sp)
+                        PleosToggle(convoy.automatic, convoy.toggleAutomatic, enabled = enabled,
+                            label = { Text("2분 자동", style = MaterialTheme.typography.labelMedium) }, modifier = Modifier.heightIn(min = Pleos215.ButtonMedium))
+                        Text(if (convoy.automatic) "다음 갱신 ${convoy.secondsUntilUpdate}초" else "수동 갱신", style = MaterialTheme.typography.labelMedium)
                         NavigationAction("지금 갱신", enabled) { convoy.advance(); actions.refresh() }
-                        Text("갱신 ${convoy.revision}회", fontSize = 20.sp)
-                        FilterChip(convoy.useRealCar, convoy.toggleRealCar,
+                        Text("갱신 ${convoy.revision}회", style = MaterialTheme.typography.labelSmall)
+                        PleosToggle(convoy.useRealCar, convoy.toggleRealCar,
                             enabled = enabled && (convoy.useRealCar || live.location.status == ReadStatus.READY),
-                            label = { Text("우리 차 내비 위치", fontSize = 22.sp) }, modifier = Modifier.heightIn(min = 76.dp))
-                        TextButton(convoy.reset, enabled = enabled, modifier = Modifier.heightIn(min = 76.dp)) {
-                            Text("시연 처음부터", fontSize = 22.sp)
+                            label = { Text("우리 차 내비 위치", style = MaterialTheme.typography.labelMedium) }, modifier = Modifier.heightIn(min = Pleos215.ButtonMedium))
+                        PleosTextButton(convoy.reset, enabled = enabled, modifier = Modifier.heightIn(min = Pleos215.ButtonMedium)) {
+                            Text("시연 처음부터", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                     "crew" -> {
@@ -117,7 +117,7 @@ private fun JourneyFeaturePanel(page: String, enabled: Boolean, go: (String) -> 
                         }
                         NavigationAction("일행 초대 화면", enabled) { go("invite") }
                         NavigationAction("지금 갱신", enabled) { convoy.advance(); actions.refresh() }
-                        Text("갱신 ${convoy.revision}회", fontSize = 20.sp)
+                        Text("갱신 ${convoy.revision}회", style = MaterialTheme.typography.labelSmall)
                         MutedText("실제 일행의 위치 공유와 통신은 아직 연결하지 않았어요.")
                     }
                     "schedule" -> {

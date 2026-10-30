@@ -35,7 +35,7 @@ private fun TravelLobby(wide: Boolean, enabled: Boolean, go: (String) -> Unit) {
     TwoColumns(wide,
         first = {
             AppPanel {
-                AppSymbol("calendar", Modifier.size(38.dp))
+                AppSymbol("calendar", Modifier.size(Pleos215.IconMedium))
                 SectionTitle("새로운 여행")
                 MutedText("목적지를 정하고, 함께 갈 일행을 초대하세요.")
                 NavigationAction("여행 만들기", enabled, filled = true) { go("create") }
@@ -43,7 +43,7 @@ private fun TravelLobby(wide: Boolean, enabled: Boolean, go: (String) -> Unit) {
         },
         second = {
             AppPanel {
-                AppSymbol("people", Modifier.size(38.dp))
+                AppSymbol("people", Modifier.size(Pleos215.IconMedium))
                 SectionTitle("일행과 합류하기")
                 MutedText("전달받은 초대 코드로 같은 여행에 참여하세요.")
                 NavigationAction("초대 코드로 참여", enabled) { go("join") }
@@ -54,9 +54,9 @@ private fun TravelLobby(wide: Boolean, enabled: Boolean, go: (String) -> Unit) {
     AppPanel {
         TwoColumns(wide,
             first = {
-                Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     AppBadge("예시 여행", warm = true)
-                    Text("강릉, 바다 보러", fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    Text("강릉, 바다 보러", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     MutedText("10월 31일 · 1박 2일")
                     MemberRow("3", "세 가족이 함께", "우리 가족 · 민수네 · 지연네")
                     NavigationAction("예시 여행 열기", enabled, filled = true) { go("home") }
@@ -101,7 +101,7 @@ private fun JoinTrip() {
                     border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     modifier = Modifier.weight(1f)) {
                     Box(Modifier.height(100.dp), contentAlignment = Alignment.Center) {
-                        Text("—", fontSize = 32.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("—", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -132,7 +132,7 @@ private fun TripSchedule(wide: Boolean, enabled: Boolean, go: (String) -> Unit) 
             }
         },
         second = {
-            Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
                 AppPanel {
                     SectionTitle("이번 여행에 하고 싶은 것")
                     WishBubble("우리 가족", "바다 보고 싶어")
@@ -163,15 +163,15 @@ private fun TripTalk(wide: Boolean) {
         first = {
             AppPanel {
                 Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    AppSymbol("people", Modifier.size(30.dp))
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    AppSymbol("people", Modifier.size(Pleos215.IconMedium))
                     SectionTitle("우리 여행 채널")
                     AppBadge("차량 3대")
                 }
                 WishBubble("민수네 · 10:42", "삼촌 차 보여?")
                 WishBubble("우리 차 · 10:43", "응, 다음 휴게소에서 같이 쉬자.")
                 MutedText("대화 내용은 화면 구성을 위한 예시입니다.")
-                Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(22.dp)) {
+                Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(24.dp)) {
                     Row(Modifier.fillMaxWidth().padding(24.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                         AppSymbol("mic", Modifier.size(50.dp))
@@ -247,7 +247,7 @@ private fun TripInvite(enabled: Boolean, go: (String) -> Unit) {
     AppPanel {
         SectionTitle("강릉, 바다 보러")
         MutedText("초대 코드")
-        Text("— — — — — —", fontSize = 36.sp, fontWeight = FontWeight.Bold)
+        Text("— — — — — —", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         MutedText("코드 발급과 초대 공유는 아직 연결되지 않았습니다.")
         FeatureAction("초대 코드 발급")
         FeatureAction("초대 공유하기")
@@ -275,12 +275,12 @@ private fun TripAlbum(wide: Boolean) {
         second = {
             AppPanel {
                 SectionTitle("함께 남길 이야기")
-                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(18.dp)) {
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(16.dp)) {
                     Row(Modifier.fillMaxWidth().padding(22.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AppSymbol("mic", Modifier.size(36.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("목소리로 남길 순간", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+                        AppSymbol("mic", Modifier.size(Pleos215.IconMedium))
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("목소리로 남길 순간", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             MutedText("음성 기록이 놓일 자리")
                         }
                     }
@@ -295,21 +295,21 @@ private fun TripAlbum(wide: Boolean) {
 
 @Composable
 private fun WishBubble(name: String, words: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(name, fontSize = 21.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Surface(color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(18.dp)) {
-            Text(words, Modifier.fillMaxWidth().padding(20.dp), fontSize = 25.sp, lineHeight = 36.sp)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Surface(color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(16.dp)) {
+            Text(words, Modifier.fillMaxWidth().padding(20.dp), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
 
 @Composable
 private fun ScheduleStop(time: String, title: String, detail: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-        Text(time, Modifier.width(86.dp), fontSize = 24.sp, fontWeight = FontWeight.SemiBold,
+    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        Text(time, Modifier.width(86.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
             MutedText(detail)
         }
     }
@@ -320,8 +320,8 @@ private fun ChangeRow(place: String, before: String, after: String) {
     Surface(color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(16.dp)) {
         Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically) {
-            Text(place, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-            Text("$before  →  $after", fontSize = 25.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(place, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            Text("$before  →  $after", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

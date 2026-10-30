@@ -2,6 +2,7 @@
 
 여러 대의 차가 같은 목적지를 향해 함께 여행하는 경험을 위한 Android Automotive 앱입니다.
 별도 `:travel-preview` 모듈에 차량 상태 조회, 앱 안 도로 지도와 로컬 일행 이동 시연을 구현했습니다.
+현재 UI는 사용자가 제공한 Pleos Connect 2.1.5 디자인 원본을 기준으로 합니다. [디자인 기준과 출처](docs/design/pleos-215.md)를 참고하세요.
 
 - 여행 홈·일정·일행·대화·추억 패널을 열면서 지도를 유지합니다.
 - Vehicle SDK 2.3.2와 NaviHelper 3.0.5로 실제 차량·내비 정보를 조회하고, 미지원·오류를 구분합니다.
@@ -21,7 +22,7 @@ Windows에서는 `./gradlew.bat :travel-preview:assembleDebug`를 사용할 수 
 
 [프로젝트 안내](START_HERE.md) · [차량 연동과 지도 사용법](docs/같이가_차량연동과_로컬일행지도.md)
 
-![같이가의 앱 안 도로 지도와 일행 패널](docs/images/gatiga-roadmap-wide.png)
+![Pleos Connect 2.1.5 기준을 적용한 같이가 지도와 일행 패널](docs/images/pleos215-wide-light.png)
 
 아래는 기반으로 사용한 공식 SDK 샘플의 설명입니다.
 

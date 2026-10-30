@@ -1,10 +1,10 @@
 <resources>
     <string name="app_name">같이가 미리보기</string>
-    <color name="launcher_background">#D85E25</color>
+    <color name="launcher_background">#0064FF</color>
     <style name="Theme.TravelPreview" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
+        <item name="android:fontFamily">@font/asta_sans</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowBackground">#F2F5F8</item>
+        <item name="android:windowBackground">@color/pleos_window_background</item>
     </style>
 </resources>

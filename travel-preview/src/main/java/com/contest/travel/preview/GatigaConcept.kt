@@ -1,10 +1,5 @@
 package com.contest.travel.preview
 
-import androidx.compose.ui.graphics.Color
-
-internal val ConceptOrange = Color(0xFFF27230)
-internal val ConceptNavy = Color(0xFF152D47)
-
 internal data class TripTab(val key: String, val label: String, val symbol: String)
 
 internal val tripTabs = listOf(

@@ -7,6 +7,8 @@ import android.view.View
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -40,6 +42,8 @@ import org.maplibre.geojson.Point
 @Composable
 internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Boolean, modifier: Modifier) {
     val context = LocalContext.current
+    val dark = isSystemInDarkTheme()
+    val mapStyle = if (dark) "https://tiles.openfreemap.org/styles/dark" else "https://tiles.openfreemap.org/styles/liberty"
     val owner = LocalLifecycleOwner.current
     val convoy = LocalConvoy.current
     val live = LocalTripLive.current
@@ -67,9 +71,9 @@ internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Bool
             bridge.destroy()
         }
     }
-    LaunchedEffect(bridge, retry) {
+    LaunchedEffect(bridge, retry, mapStyle) {
         loaded = false; failed = false; status = "도로 지도를 불러오는 중"
-        bridge.load(onReady = { loaded = true; failed = false; status = "도로 지도 연결됨" },
+        bridge.load(mapStyle, dark, onReady = { loaded = true; failed = false; status = "도로 지도 연결됨" },
             onError = { failed = true; status = "지도 다운로드 실패 · 네트워크를 확인해 주세요" })
         delay(25_000)
         if (!loaded && !failed) {
@@ -86,9 +90,9 @@ internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Bool
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(status, fontSize = 18.sp,
+            Text(status, style = MaterialTheme.typography.labelSmall,
                 color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-            if (failed) TextButton(onClick = { retry++ }, enabled = enabled) { Text("지도 다시 불러오기", fontSize = 18.sp) }
+            if (failed) PleosTextButton(onClick = { retry++ }, enabled = enabled) { Text("지도 다시 불러오기", style = MaterialTheme.typography.labelSmall) }
         }
         AndroidView(factory = { bridge.view }, modifier = Modifier.weight(1f).fillMaxWidth(),
             update = {
@@ -97,28 +101,32 @@ internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Bool
                     cars.mapIndexed { i, p -> "${convoyNames[i]} ${p?.let(::formatPoint) ?: "위치 없음"}" }.joinToString(". ")
                 bridge.map?.uiSettings?.setAllGesturesEnabled(enabled)
             })
-        TextButton(onClick = { creditLinkError = null; showCredits = true }, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+        PleosTextButton(onClick = { creditLinkError = null; showCredits = true }, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
             contentPadding = PaddingValues(6.dp)) {
-            Text("OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors", fontSize = 13.sp)
+            Text("OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors", style = MaterialTheme.typography.labelSmall)
         }
     }
     if (showCredits) AlertDialog(onDismissRequest = { showCredits = false },
+        shape = RoundedCornerShape(Pleos215.RadiusPopup),
+        containerColor = if (dark) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text("지도 출처") },
         text = {
             Column {
                 listOf("OpenFreeMap" to "https://openfreemap.org/", "© OpenMapTiles" to "https://openmaptiles.org/",
                     "© OpenStreetMap contributors" to "https://www.openstreetmap.org/copyright").forEach { (name, url) ->
-                    TextButton(onClick = {
+                    PleosTextButton(onClick = {
                         runCatching { uriHandler.openUri(url) }.onFailure {
                             creditLinkError = "웹 링크를 열 수 있는 앱이 없습니다.\n$url"
                         }
-                    }, enabled = enabled, modifier = Modifier.heightIn(min = 76.dp)) {
-                        Text(name, fontSize = 22.sp)
+                    }, enabled = enabled, modifier = Modifier.heightIn(min = Pleos215.ButtonMedium)) {
+                        Text(name, style = MaterialTheme.typography.labelMedium)
                     }
                 }
-                creditLinkError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 18.sp) }
+                creditLinkError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall) }
             }
-        }, confirmButton = { TextButton(onClick = { showCredits = false }) { Text("닫기", fontSize = 22.sp) } })
+        }, confirmButton = { PleosTextButton(onClick = { showCredits = false }) { Text("닫기", style = MaterialTheme.typography.labelMedium) } })
 }
 
 private class RoadMapBridge(val view: MapView) {
@@ -140,7 +148,7 @@ private class RoadMapBridge(val view: MapView) {
         }
     }
 
-    fun load(onReady: () -> Unit, onError: () -> Unit) {
+    fun load(styleUrl: String, dark: Boolean, onReady: () -> Unit, onError: () -> Unit) {
         val generation = ++loadGeneration
         onFailure = onError
         view.getMapAsync { result ->
@@ -153,9 +161,9 @@ private class RoadMapBridge(val view: MapView) {
                 isRotateGesturesEnabled = false
                 isTiltGesturesEnabled = false
             }
-            result.setStyle("https://tiles.openfreemap.org/styles/liberty") { loaded ->
+            result.setStyle(styleUrl) { loaded ->
                 if (!destroyed && generation == loadGeneration) {
-                    runCatching { installLayers(loaded) }.onSuccess {
+                    runCatching { installLayers(loaded, dark) }.onSuccess {
                         style = loaded
                         onReady()
                     }.onFailure { onError() }
@@ -164,21 +172,24 @@ private class RoadMapBridge(val view: MapView) {
         }
     }
 
-    private fun installLayers(style: Style) {
+    private fun installLayers(style: Style, dark: Boolean) {
+        val positive = if (dark) Pleos215.PositiveDark else Pleos215.Positive
         style.addSource(GeoJsonSource("gatiga-demo-line", LineString.fromLngLats(demoRoute.map { it.point() })))
         style.addLayer(LineLayer("gatiga-demo-line", "gatiga-demo-line").withProperties(
-            lineColor(0xFF245BB0.toInt()), lineWidth(4f), lineDasharray(arrayOf(2f, 2f))))
+            lineColor(positive.toArgb()), lineWidth(4f), lineDasharray(arrayOf(2f, 2f))))
         style.addSource(GeoJsonSource("gatiga-destination", demoDestination.point()))
         style.addLayer(CircleLayer("gatiga-destination", "gatiga-destination").withProperties(
-            circleColor(0xFF172F46.toInt()), circleRadius(10f), circleStrokeColor(-1), circleStrokeWidth(3f)))
-        style.addImage("gatiga-destination-label", labelBitmap("강릉 · 목적지", 0xFF172F46.toInt()))
+            circleColor(Pleos215.Neutral.toArgb()), circleRadius(10f), circleStrokeColor(-1), circleStrokeWidth(3f)))
+        val typeface = android.graphics.Typeface.create(view.context.resources.getFont(R.font.asta_sans), 700, false)
+        style.addImage("gatiga-destination-label", labelBitmap("강릉 · 목적지", Pleos215.Neutral.toArgb(), typeface))
         style.addLayer(SymbolLayer("gatiga-destination-label", "gatiga-destination").withProperties(
             iconImage("gatiga-destination-label"), iconAllowOverlap(true), iconAnchor("top"), iconOffset(arrayOf(0f, 18f))))
         convoyNames.forEachIndexed { index, name ->
             val id = "gatiga-car-$index"
-            style.addImage(id, labelBitmap(name, convoyColors[index].toArgb()))
+            val color = if (index == 0) positive else convoyColors[index]
+            style.addImage(id, labelBitmap(name, color.toArgb(), typeface))
             style.addSource(GeoJsonSource(id, routePosition(.38 + listOf(0.0, -.12, .14)[index]).point()))
-            style.addLayer(CircleLayer("$id-dot", id).withProperties(circleColor(convoyColors[index].toArgb()),
+            style.addLayer(CircleLayer("$id-dot", id).withProperties(circleColor(color.toArgb()),
                 circleRadius(9f), circleStrokeColor(-1), circleStrokeWidth(3f)))
             // Stagger labels so all names remain visible when vehicles converge at the destination.
             val labelOffset = listOf(arrayOf(0f, -18f), arrayOf(-90f, 50f), arrayOf(90f, 50f))[index]
@@ -232,15 +243,16 @@ private class RoadMapBridge(val view: MapView) {
 private fun GeoPoint.point(): Point = Point.fromLngLat(longitude, latitude)
 private fun GeoPoint.latLng(): LatLng = LatLng(latitude, longitude)
 
-private fun labelBitmap(name: String, color: Int): Bitmap {
+private fun labelBitmap(name: String, color: Int, typeface: android.graphics.Typeface): Bitmap {
     val bitmap = Bitmap.createBitmap(164, 54, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     paint.color = color
     canvas.drawRoundRect(1f, 1f, 163f, 53f, 16f, 16f, paint)
-    paint.color = android.graphics.Color.WHITE
+    paint.color = if (color == Pleos215.Gray400.toArgb()) Pleos215.Neutral.toArgb() else android.graphics.Color.WHITE
     paint.textSize = 24f; paint.textAlign = Paint.Align.CENTER
-    paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+    paint.typeface = typeface
+    paint.fontVariationSettings = "'wght' 700"
     canvas.drawText(name, 82f, 35f, paint)
     return bitmap
 }

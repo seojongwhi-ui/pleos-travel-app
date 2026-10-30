@@ -1,10 +1,12 @@
 package com.contest.travel.preview
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -13,6 +15,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -24,73 +27,96 @@ internal fun AppBadge(text: String, warm: Boolean = false) {
     Surface(
         color = if (warm) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
         contentColor = if (warm) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-        shape = RoundedCornerShape(100.dp)
+        shape = RoundedCornerShape(Pleos215.RadiusSmall)
     ) {
-        Text(text, Modifier.padding(horizontal = 15.dp, vertical = 9.dp), fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text(text, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelSmall)
     }
 }
 
 @Composable
 internal fun AppPanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(24.dp), modifier = modifier.fillMaxWidth()) {
-        Column(Modifier.padding(26.dp), verticalArrangement = Arrangement.spacedBy(18.dp), content = content)
+    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(Pleos215.RadiusLarge), modifier = modifier.fillMaxWidth()) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
     }
 }
 
 @Composable
 internal fun PageTitle(title: String, subtitle: String? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(title, fontSize = 36.sp, lineHeight = 48.sp, fontWeight = FontWeight.Bold)
+        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         subtitle?.let { MutedText(it) }
     }
 }
 
 @Composable
 internal fun MutedText(text: String) {
-    Text(text, fontSize = 23.sp, lineHeight = 34.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable
 internal fun SectionTitle(text: String) {
-    Text(text, fontSize = 27.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
+    Text(text, style = MaterialTheme.typography.titleLarge)
 }
 
 @Composable
 internal fun NavigationAction(label: String, enabled: Boolean, filled: Boolean = false, onClick: () -> Unit) {
-    if (filled) {
-        Button(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 88.dp),
-            contentPadding = PaddingValues(18.dp)) {
-            Text(label, fontSize = 25.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold)
-        }
-    } else {
-        OutlinedButton(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 88.dp),
-            contentPadding = PaddingValues(18.dp)) {
-            Text(label, fontSize = 24.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold)
-        }
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    val ink = MaterialTheme.colorScheme.onSurface
+    Button(onClick = onClick, enabled = enabled, interactionSource = interactions,
+        shape = RoundedCornerShape(if (filled) Pleos215.RadiusLarge else Pleos215.RadiusMedium),
+        modifier = Modifier.fillMaxWidth().heightIn(min = if (filled) Pleos215.ButtonLarge else Pleos215.ButtonMedium),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (filled) {
+                if (pressed) {
+                    if (ink == Color.White) Color(0xFFC7C9CE) else Color(0xFF313236)
+                } else MaterialTheme.colorScheme.primary
+            } else ink.copy(alpha = if (pressed) .10f else .05f),
+            contentColor = if (filled) MaterialTheme.colorScheme.onPrimary else ink,
+            disabledContainerColor = ink.copy(alpha = .05f), disabledContentColor = ink.copy(alpha = .32f)),
+        contentPadding = PaddingValues(horizontal = if (filled) 40.dp else 32.dp, vertical = 16.dp)) {
+        Text(label, style = if (filled) MaterialTheme.typography.titleLarge else MaterialTheme.typography.labelLarge)
     }
 }
 
 @Composable
 internal fun FeatureAction(label: String) {
-    Button(onClick = {}, enabled = false, shape = RoundedCornerShape(18.dp),
-        modifier = Modifier.fillMaxWidth().heightIn(min = 88.dp),
-        contentPadding = PaddingValues(18.dp)) {
-        Text(label, fontSize = 24.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold)
-    }
+    NavigationAction(label, enabled = false, onClick = {})
+}
+
+@Composable
+internal fun PleosTextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+    content: @Composable RowScope.() -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = Pleos215.ButtonMedium),
+        shape = RoundedCornerShape(Pleos215.RadiusMedium), contentPadding = contentPadding,
+        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface,
+            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .32f)), content = content)
+}
+
+@Composable
+internal fun PleosToggle(selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier,
+    enabled: Boolean = true, label: @Composable () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    FilterChip(selected, onClick, enabled = enabled, label = label,
+        modifier = modifier.heightIn(min = Pleos215.ButtonMedium), shape = RoundedCornerShape(Pleos215.RadiusMedium),
+        border = null, colors = FilterChipDefaults.filterChipColors(
+            containerColor = colors.onSurface.copy(alpha = .05f), labelColor = colors.onSurface,
+            selectedContainerColor = colors.primary, selectedLabelColor = colors.onPrimary,
+            disabledContainerColor = colors.onSurface.copy(alpha = .05f),
+            disabledLabelColor = colors.onSurface.copy(alpha = .32f)))
 }
 
 @Composable
 internal fun FormField(label: String, placeholder: String, symbol: String? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
         Surface(color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(16.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 88.dp).padding(22.dp),
+            Row(Modifier.fillMaxWidth().heightIn(min = Pleos215.ButtonMedium).padding(24.dp),
                 horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(placeholder, fontSize = 24.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                symbol?.let { AppSymbol(it, Modifier.size(28.dp)) }
+                Text(placeholder, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                symbol?.let { AppSymbol(it, Modifier.size(Pleos215.IconMedium)) }
             }
         }
     }
@@ -98,18 +124,18 @@ internal fun FormField(label: String, placeholder: String, symbol: String? = nul
 
 @Composable
 internal fun MemberRow(letter: String, name: String, detail: String, trailing: String? = null) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 88.dp), verticalAlignment = Alignment.CenterVertically,
+    Row(Modifier.fillMaxWidth().heightIn(min = Pleos215.ButtonMedium), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(18.dp)) {
+        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(16.dp)) {
             Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
-                Text(letter, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Text(letter, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(name, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-            Text(detail, fontSize = 21.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            Text(detail, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        trailing?.let { Text(it, fontSize = 23.sp, fontWeight = FontWeight.Medium) }
+        trailing?.let { Text(it, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Normal) }
     }
 }
 
@@ -128,7 +154,7 @@ internal fun TwoColumns(wide: Boolean, first: @Composable () -> Unit, second: @C
 
 @Composable
 internal fun RouteMark(modifier: Modifier = Modifier) {
-    val tint = MaterialTheme.colorScheme.primary
+    val tint = MaterialTheme.colorScheme.onSurface
     Canvas(modifier) {
         val route = Path().apply {
             moveTo(size.width * .2f, size.height * .8f)
@@ -141,9 +167,9 @@ internal fun RouteMark(modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun AppSymbol(kind: String, modifier: Modifier = Modifier, tint: Color = MaterialTheme.colorScheme.primary) {
+internal fun AppSymbol(kind: String, modifier: Modifier = Modifier, tint: Color = MaterialTheme.colorScheme.onSurface) {
     Canvas(modifier) {
-        val stroke = Stroke(2.2.dp.toPx(), cap = StrokeCap.Round)
+        val stroke = Stroke(size.width * (3.6f / 48f), cap = StrokeCap.Round, join = StrokeJoin.Round)
         fun point(x: Float, y: Float) = Offset(size.width * x, size.height * y)
         fun line(x1: Float, y1: Float, x2: Float, y2: Float) =
             drawLine(tint, point(x1, y1), point(x2, y2), stroke.width, StrokeCap.Round)
@@ -204,13 +230,13 @@ internal fun TripMap(height: Dp = 300.dp) {
     val street = MaterialTheme.colorScheme.surface
     val route = MaterialTheme.colorScheme.primary
     BoxWithConstraints(Modifier.fillMaxWidth().height(height)) {
-        Surface(color = base, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxSize()) {
+        Surface(color = base, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxSize()) {
             Canvas(Modifier.fillMaxSize()) {
                 val river = Path().apply {
                     moveTo(size.width * .7f, -40f)
                     cubicTo(size.width * .35f, size.height * .25f, size.width * .95f, size.height * .7f, size.width * .6f, size.height + 40f)
                 }
-                drawPath(river, Color(0xFFBDDCE8).copy(alpha = .55f), style = Stroke(42.dp.toPx()))
+                drawPath(river, route.copy(alpha = .10f), style = Stroke(42.dp.toPx()))
                 listOf(.2f, .48f, .76f).forEach { x ->
                     drawLine(street, Offset(size.width * x, 0f), Offset(size.width * (x - .18f), size.height), 18.dp.toPx())
                 }
@@ -222,13 +248,13 @@ internal fun TripMap(height: Dp = 300.dp) {
                     cubicTo(size.width * .2f, size.height * .1f, size.width * .6f, size.height * .95f, size.width * .85f, size.height * .2f)
                 }
                 drawPath(path, route.copy(alpha = .2f), style = Stroke(18.dp.toPx(), cap = StrokeCap.Round))
-                drawPath(path, ConceptOrange, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(path, Pleos215.Positive, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round))
             }
         }
         listOf(Triple("A", .15f, .57f), Triple("B", .48f, .43f), Triple("C", .75f, .23f)).forEach { (label, x, y) ->
             Surface(color = route, contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.offset(x = maxWidth * x, y = maxHeight * y)) {
-                Text(label, Modifier.padding(horizontal = 16.dp, vertical = 10.dp), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                shape = RoundedCornerShape(16.dp), modifier = Modifier.offset(x = maxWidth * x, y = maxHeight * y)) {
+                Text(label, Modifier.padding(horizontal = 16.dp, vertical = 10.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
         }
         Box(Modifier.align(Alignment.TopStart).padding(16.dp)) { AppBadge("일행 3대") }

@@ -81,7 +81,7 @@ internal fun SdkConnectionScreen(wide: Boolean, enabled: Boolean) {
 internal fun VehicleMetrics(wide: Boolean) {
     val live = LocalTripLive.current
     if (wide) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 ReadingLine("현재 트립 주행 시간", live.minutes, ::formatMinutes)
                 ReadingLine("현재 트립 주행 거리", live.meters, ::formatMeters)
@@ -92,7 +92,7 @@ internal fun VehicleMetrics(wide: Boolean) {
             }
         }
     } else {
-        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             ReadingLine("현재 트립 주행 시간", live.minutes, ::formatMinutes)
             ReadingLine("현재 트립 주행 거리", live.meters, ::formatMeters)
             ReadingLine("배터리 충전율", live.battery) { "$it%" }
@@ -104,8 +104,8 @@ internal fun VehicleMetrics(wide: Boolean) {
 @Composable
 internal fun <T> ReadingLine(label: String, reading: Reading<T>, format: (T) -> String) {
     Surface(color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(16.dp)) {
-        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(label, fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val text = when (reading.status) {
                 ReadStatus.READY -> reading.value?.let(format) ?: "값 없음"
                 ReadStatus.LOADING -> "확인 중"
@@ -114,10 +114,10 @@ internal fun <T> ReadingLine(label: String, reading: Reading<T>, format: (T) -> 
                 ReadStatus.ERROR -> "조회 실패"
                 ReadStatus.STOPPED -> "연결 종료"
             }
-            Text(text, fontSize = 28.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold,
+            Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
                 color = if (reading.status == ReadStatus.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
             val stamp = reading.receivedAt?.let { SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(it)) }
-            Text(if (stamp != null) "SDK 수신 · $stamp" else reading.message, fontSize = 20.sp, lineHeight = 29.sp,
+            Text(if (stamp != null) "SDK 수신 · $stamp" else reading.message, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -141,7 +141,7 @@ private fun NavigationSummary() {
     if (destination != null) {
         MutedText(destination.name.ifBlank { "설정된 목적지" })
         Text("${formatMeters(destination.meters)} · ${formatMinutes((destination.seconds + 59) / 60)}",
-            fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+            style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
     } else MutedText(live.destination.message)
 }
 

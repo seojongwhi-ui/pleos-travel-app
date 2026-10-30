@@ -16,28 +16,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val AppLight = lightColorScheme(
-    primary = ConceptNavy, onPrimary = Color.White,
-    background = Color(0xFFF2F5F8), surface = Color.White,
-    onBackground = Color(0xFF152738), onSurface = Color(0xFF152738),
-    surfaceVariant = Color(0xFFE7EEF3), onSurfaceVariant = Color(0xFF52677A),
-    primaryContainer = Color(0xFFE2ECF4), onPrimaryContainer = ConceptNavy,
-    secondaryContainer = Color(0xFFFFEBDD), onSecondaryContainer = Color(0xFF984417),
-    outline = Color(0xFFD4DEE6)
-)
-private val AppDark = darkColorScheme(
-    primary = Color(0xFFC6DFF6), onPrimary = ConceptNavy,
-    background = Color(0xFF111C27), surface = Color(0xFF1C2A39),
-    onBackground = Color(0xFFF0F5FA), onSurface = Color(0xFFF0F5FA),
-    surfaceVariant = Color(0xFF2A3B4D), onSurfaceVariant = Color(0xFFBFCFDE),
-    primaryContainer = Color(0xFF334D65), onPrimaryContainer = Color(0xFFE1EFFD),
-    secondaryContainer = Color(0xFF573C2A), onSecondaryContainer = Color(0xFFFFD5B8),
-    outline = Color(0xFF516579)
-)
-
 @Composable
 internal fun TravelPreview(drivingUx: DrivingUxState, liveTrip: LiveTripState, actions: TripActions, foreground: Boolean) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) AppDark else AppLight) {
+    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) PleosDark else PleosLight, typography = PleosTypography) {
         val convoy = rememberConvoyController(foreground)
         CompositionLocalProvider(LocalTripLive provides liveTrip, LocalTripActions provides actions, LocalConvoy provides convoy) {
         var backStack by rememberSaveable { mutableStateOf(listOf("lobby")) }
@@ -70,36 +51,36 @@ internal fun TravelPreview(drivingUx: DrivingUxState, liveTrip: LiveTripState, a
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val wide = maxWidth >= 1100.dp
-                Column(Modifier.fillMaxSize().padding(horizontal = if (wide) 30.dp else 22.dp)) {
+                Column(Modifier.fillMaxSize().padding(horizontal = Pleos215.WindowPadding)) {
                     Row(
-                        Modifier.fillMaxWidth().heightIn(min = 100.dp),
+                        Modifier.fillMaxWidth().heightIn(min = Pleos215.PageNavigation),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (canGoBack) {
-                                TextButton(onClick = goBack, modifier = Modifier.heightIn(min = 76.dp)) {
-                                    AppSymbol("back", Modifier.size(28.dp))
+                                PleosTextButton(onClick = goBack, modifier = Modifier.heightIn(min = Pleos215.ButtonMedium)) {
+                                    AppSymbol("back", Modifier.size(Pleos215.IconMedium))
                                     Spacer(Modifier.width(10.dp))
-                                    Text("뒤로가기", fontSize = 23.sp)
+                                    Text("뒤로가기", style = MaterialTheme.typography.labelMedium)
                                 }
                             }
-                            RouteMark(Modifier.size(36.dp))
-                            Text("같이가", fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                            RouteMark(Modifier.size(Pleos215.Icon))
+                            Text("같이가", style = MaterialTheme.typography.titleLarge)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (page != "lobby") {
-                                TextButton(onClick = { go("lobby") }, enabled = drivingUx.canInteract,
-                                    modifier = Modifier.heightIn(min = 76.dp)) {
-                                    Text("여행 목록", fontSize = 23.sp)
+                                PleosTextButton(onClick = { go("lobby") }, enabled = drivingUx.canInteract,
+                                    modifier = Modifier.heightIn(min = Pleos215.ButtonMedium)) {
+                                    Text("여행 목록", style = MaterialTheme.typography.labelMedium)
                                 }
                             }
                             AppBadge(if (inTrip) "개발 시연" else "미리보기")
                         }
                     }
                     drivingUx.notice?.let { notice ->
-                        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp)) {
-                            Text(notice, Modifier.fillMaxWidth().padding(18.dp), fontSize = 22.sp)
+                        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(16.dp)) {
+                            Text(notice, Modifier.fillMaxWidth().padding(18.dp), style = MaterialTheme.typography.labelMedium)
                         }
                         Spacer(Modifier.height(14.dp))
                     }
@@ -112,7 +93,7 @@ internal fun TravelPreview(drivingUx: DrivingUxState, liveTrip: LiveTripState, a
                             }
                         }
                     } else {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             key(if (page in journeyMapPages) "journey-map" else page) {
                                 PageBody(page, wide, drivingUx.canInteract, go, Modifier.weight(1f))
                             }
@@ -134,7 +115,7 @@ private fun PageBody(page: String, wide: Boolean, canNavigate: Boolean, go: (Str
     }
     Column(
         modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 26.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp)
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         AppPage(page, wide, canNavigate, go)
     }
@@ -145,7 +126,7 @@ private fun AppRail(selected: String, enabled: Boolean, go: (String) -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(24.dp)) {
         Column(Modifier.width(180.dp).fillMaxHeight().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("강릉 여행", Modifier.padding(horizontal = 10.dp, vertical = 18.dp),
-                fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             tripTabs.forEach { tab ->
                 Surface(
                     onClick = { go(tab.key) }, enabled = enabled,
@@ -153,15 +134,15 @@ private fun AppRail(selected: String, enabled: Boolean, go: (String) -> Unit) {
                     shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp)
                 ) {
                     Column(Modifier.padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        AppSymbol(tab.symbol, Modifier.size(30.dp))
-                        Text(tab.label, fontSize = 24.sp,
-                            fontWeight = if (tab.key == selected) FontWeight.Bold else FontWeight.Medium)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AppSymbol(tab.symbol, Modifier.size(Pleos215.IconMedium))
+                        Text(tab.label, style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (tab.key == selected) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
             }
             Spacer(Modifier.weight(1f))
-            Text("차량 3대", Modifier.padding(12.dp), fontSize = 22.sp,
+            Text("차량 3대", Modifier.padding(12.dp), style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -169,18 +150,18 @@ private fun AppRail(selected: String, enabled: Boolean, go: (String) -> Unit) {
 
 @Composable
 private fun BottomTabs(selected: String, enabled: Boolean, go: (String) -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp)) {
-        Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(24.dp)) {
+        Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             tripTabs.forEach { tab ->
                 Surface(
                     onClick = { go(tab.key) }, enabled = enabled,
                     color = if (selected == tab.key) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(14.dp), modifier = Modifier.weight(1f).heightIn(min = 94.dp)
+                    shape = RoundedCornerShape(16.dp), modifier = Modifier.weight(1f).heightIn(min = Pleos215.ButtonMedium)
                 ) {
                     Column(Modifier.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        AppSymbol(tab.symbol, Modifier.size(27.dp))
-                        Text(tab.label, fontSize = 21.sp, fontWeight = if (selected == tab.key) FontWeight.Bold else FontWeight.Medium)
+                        AppSymbol(tab.symbol, Modifier.size(Pleos215.IconMedium))
+                        Text(tab.label, style = MaterialTheme.typography.labelMedium, fontWeight = if (selected == tab.key) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
             }

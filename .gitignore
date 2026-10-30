@@ -14,3 +14,4 @@ signing.properties
 captures/
 .DS_Store
 Thumbs.db
+design/reference/*.fig

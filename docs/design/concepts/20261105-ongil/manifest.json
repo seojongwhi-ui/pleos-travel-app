@@ -1,0 +1,66 @@
+{
+  "archivedOn": "2026-11-05",
+  "repository": "seojongwhi-ui/pleos-travel-app",
+  "branch": "기획서",
+  "figma": {
+    "fileKey": "c3q0MskWTtRP5gE9WspRVo",
+    "nodeId": "34:99038",
+    "screenNodeId": "34:99065",
+    "screenId": "S-10",
+    "screenName": "주행 중 메인 · 기본",
+    "wireframeVersion": "v0.3",
+    "url": "https://www.figma.com/design/c3q0MskWTtRP5gE9WspRVo/현대-공모전?node-id=34-99038"
+  },
+  "assets": [
+    {
+      "file": "s10-wireframe-full.png",
+      "status": "reference",
+      "provenance": "Figma get_screenshot; frame 34:99038",
+      "sourceFilename": "wireframe-s10.png",
+      "bytes": 221797,
+      "width": 2000,
+      "height": 1227,
+      "sha256": "d2f6ee0bd5c25551d2573ed64d6abad33c2869c414ef7125885e3748e36b74d8"
+    },
+    {
+      "file": "s10-wireframe-screen.png",
+      "status": "reference",
+      "provenance": "Figma get_screenshot; frame 34:99065",
+      "sourceFilename": "s10-screen-mood-reference.png",
+      "bytes": 109922,
+      "width": 1700,
+      "height": 1184,
+      "sha256": "09d5d4a2795c3cabc63b925fd05389b513ec46fbbde38d82935b1b0c685168d1"
+    },
+    {
+      "file": "s10-exploration-warm.png",
+      "status": "exploration",
+      "provenance": "built-in image_gen; ivory and deep teal",
+      "sourceFilename": "exec-b99e57be-cf4b-401b-b989-02a6c1d31b4a.png",
+      "bytes": 1488441,
+      "width": 1503,
+      "height": 1047,
+      "sha256": "25282e2ab99287541d97d33ab80d05646844e0cf977040a596cc7486d0f7c7ed"
+    },
+    {
+      "file": "s10-exploration-dark.png",
+      "status": "exploration",
+      "provenance": "built-in image_gen; charcoal and mint",
+      "sourceFilename": "exec-2f8120ec-cb09-47a1-bcb9-39e814d6b17b.png",
+      "bytes": 1501314,
+      "width": 1503,
+      "height": 1047,
+      "sha256": "69d0028e2e2b70bcc115b9974efbb3a53e30b19552fded4e061b4700f3099f56"
+    },
+    {
+      "file": "s10-ongil-blue-white.png",
+      "status": "approved-mood-preview",
+      "provenance": "built-in image_gen; approved blue and white direction",
+      "sourceFilename": "exec-da08a724-863c-4130-81f2-c1e3ed24c2af.png",
+      "bytes": 1516558,
+      "width": 1503,
+      "height": 1047,
+      "sha256": "64fa105341a017a18db3cf5eda60896dae85bdca612585de69a8bdf2f12817c9"
+    }
+  ]
+}

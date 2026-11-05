@@ -1,5 +1,6 @@
 # 같이가 개발 기준
 
+- 기획서, 기획 대화 기록, 탐색 이미지의 Git 반영 위치는 `seojongwhi-ui/pleos-travel-app` 저장소의 기존 `기획서` 브랜치다. 해당 자료의 커밋·푸시 요청을 받으면 원격 저장소와 현재 브랜치를 먼저 확인한다.
 - 사용자가 제공한 `Pleos_Connect_display_guide_215.fig`와 `Pleos_Connect_design_assets_215.fig`를 UI 기준으로 사용한다. 현재 사용자 지시가 항상 우선한다.
 - UI를 수정하기 전에 `docs/design/pleos-215.md`와 `docs/design/pleos-215-tokens.json`을 읽는다. 원본은 `design/reference/`에 있으며 다운로드 원본도 유지한다.
 - 공통 색상·서체·문자 크기·행간·버튼 규격은 `travel-preview/.../PleosDesign215.kt`와 `PreviewComponents.kt`에서 관리한다. 새 임의 글자 크기, 색상, 버튼 모양을 화면별로 추가하지 않는다.

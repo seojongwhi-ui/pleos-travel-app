@@ -14,4 +14,6 @@ signing.properties
 captures/
 .DS_Store
 Thumbs.db
+__pycache__/
+*.pyc
 design/reference/*.fig

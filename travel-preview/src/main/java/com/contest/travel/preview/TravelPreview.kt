@@ -38,6 +38,7 @@ internal fun TravelPreview(drivingUx: DrivingUxState, liveTrip: LiveTripState,
                         }
                         LinkCarDemoScreen(wide = wide,
                             enabled = drivingUx.canInteract,
+                            foreground = foreground,
                             onExit = { (context as? Activity)?.finish() },
                             modifier = Modifier.weight(1f))
                     }

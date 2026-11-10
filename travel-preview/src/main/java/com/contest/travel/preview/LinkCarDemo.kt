@@ -1,5 +1,9 @@
 package com.contest.travel.preview
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -22,7 +26,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.ConnectException
 
 /** The 21 frames in Figma section 252:11453. */
 internal enum class WireScreen {
@@ -59,6 +67,13 @@ internal class WireSession {
     var showHistory by mutableStateOf(false)
     var message by mutableStateOf("")
     var wager by mutableStateOf(false)
+    var generatedPoll by mutableStateOf<GeneratedPoll?>(null)
+    var pollBusy by mutableStateOf(false)
+    var showVoiceMenu by mutableStateOf(false)
+    var showVoiceRecorder by mutableStateOf(false)
+    var showPollTextEntry by mutableStateOf(false)
+    var pollDraft by mutableStateOf("")
+    var lastNoteId by mutableStateOf<String?>(null)
 
     fun open(next: WireScreen) {
         if (screen != next) stack.add(next)
@@ -96,8 +111,30 @@ internal object Wire {
 }
 
 @Composable
-internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, onExit: () -> Unit, modifier: Modifier = Modifier) {
+internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, foreground: Boolean,
+    onExit: () -> Unit, modifier: Modifier = Modifier) {
     val s = remember { WireSession() }
+    val context = LocalContext.current
+    val voice = remember { LinkCarVoiceRuntime(context) }
+    val live = LocalTripLive.current
+    var locationPermissionAsked by remember { mutableStateOf(false) }
+    val fusedPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        if (it) voice.startLocation()
+        s.showVoiceMenu = true
+    }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            if (!locationPermissionAsked &&
+                context.checkSelfPermission("pleos.car.permission.FUSED_LOCATION") != PackageManager.PERMISSION_GRANTED) {
+                locationPermissionAsked = true
+                fusedPermission.launch("pleos.car.permission.FUSED_LOCATION")
+            } else s.showVoiceMenu = true
+        } else s.message = "마이크 권한이 거부되어 음성을 사용할 수 없습니다."
+    }
+    DisposableEffect(voice) { onDispose { voice.release() } }
+    val naviPoint = live.location.value?.takeIf { live.location.status == ReadStatus.READY && it.isValid() }
+    LaunchedEffect(naviPoint) { voice.updateFallbackPoint(naviPoint) }
+    LaunchedEffect(foreground) { if (foreground) voice.startLocation() else voice.release() }
     val convoy by rememberUpdatedState(LocalConvoy.current)
     val screen = s.screen
     BackHandler { if (screen == WireScreen.HOME) onExit() else s.back() }
@@ -133,9 +170,13 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, onExit: () -> Un
             s.progress = (s.progress + .002f).coerceAtMost(1f)
             ticks++
             if (ticks % 35 == 0) convoy.advance()
-            if (s.progress >= .46f && !s.roadVoiceShown && s.screen == WireScreen.DRIVE) {
-                s.roadVoiceShown = true
-                s.open(WireScreen.VOICE_APPROACH)
+            if (!voice.audio.isPlaying) {
+                voice.notes.due(s.progress)?.let { (note, car) ->
+                    voice.play(note, car)
+                    s.lastNoteId = note.id
+                    s.roadVoiceShown = true
+                    if (s.screen == WireScreen.DRIVE) s.open(WireScreen.VOICE_DELIVER)
+                }
             }
         }
     }
@@ -153,14 +194,87 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, onExit: () -> Un
                     WireScreen.MUSIC_PICK -> WireMusicPick(s, contentWide, enabled)
                     WireScreen.FIRST_SONG -> WireFirstSong(s, contentWide, enabled)
                     WireScreen.ARRIVED, WireScreen.SUMMARY, WireScreen.SAVE -> WireEnding(s, screen, contentWide, enabled)
-                    else -> WireDriving(s, screen, contentWide, enabled)
+                    else -> WireDriving(s, screen, contentWide, enabled, voice, onVoiceClick = {
+                        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                        } else if (!locationPermissionAsked &&
+                            context.checkSelfPermission("pleos.car.permission.FUSED_LOCATION") != PackageManager.PERMISSION_GRANTED) {
+                            locationPermissionAsked = true
+                            fusedPermission.launch("pleos.car.permission.FUSED_LOCATION")
+                        } else s.showVoiceMenu = true
+                    })
                 }
             }
         }
     }
+    if (s.showVoiceMenu) AlertDialog(onDismissRequest = { s.showVoiceMenu = false },
+        title = { Text("모두에게 말하기") },
+        text = { Text("말로 투표 안건을 만들거나 길에 원본 음성을 남길 수 있어요.") },
+        dismissButton = { TextButton(onClick = { s.showVoiceMenu = false }) { Text("취소") } },
+        confirmButton = {
+            Column {
+                TextButton(onClick = {
+                    s.showVoiceMenu = false
+                    voice.startPollSpeech { transcript ->
+                        s.message = "인식: $transcript"
+                        s.pollBusy = true
+                    }
+                }) { Text("투표 안건 말하기") }
+                TextButton(onClick = { s.showVoiceMenu = false; s.showVoiceRecorder = true }) {
+                    Text("길에 음성 남기기")
+                }
+            }
+        })
+    if (s.showVoiceRecorder) AlertDialog(onDismissRequest = {
+        if (voice.isRecording) voice.cancelRecording()
+        s.showVoiceRecorder = false
+    }, title = { Text("길에 음성 남기기") },
+        text = { Text("${voice.status}\n녹음 위치: ${voice.locationStatus}") },
+        dismissButton = { TextButton(onClick = {
+            if (voice.isRecording) voice.cancelRecording()
+            s.showVoiceRecorder = false
+        }) { Text("취소") } },
+        confirmButton = { TextButton(onClick = {
+            if (voice.isRecording) {
+                voice.finishRecording(s.progress, naviPoint)?.let {
+                    s.lastNoteId = it.id
+                    s.message = voice.status
+                    s.open(WireScreen.VOICE_RECEIVED)
+                }
+                s.showVoiceRecorder = false
+            } else voice.startRecording()
+        }) { Text(if (voice.isRecording) "녹음 완료" else "녹음 시작") } })
+    if (s.showPollTextEntry) AlertDialog(onDismissRequest = { s.showPollTextEntry = false },
+        title = { Text("텍스트로 AI 투표 시험") },
+        text = {
+            TextField(value = s.pollDraft, onValueChange = { s.pollDraft = it.take(500) },
+                label = { Text("투표할 내용") }, singleLine = true)
+        },
+        dismissButton = { TextButton(onClick = { s.showPollTextEntry = false }) { Text("취소") } },
+        confirmButton = { TextButton(onClick = {
+            if (s.pollDraft.isNotBlank()) {
+                s.message = "인식: ${s.pollDraft.trim()}"
+                s.pollBusy = true
+                s.showPollTextEntry = false
+            }
+        }, enabled = s.pollDraft.isNotBlank()) { Text("AI로 만들기") } })
+    LaunchedEffect(s.message, s.pollBusy) {
+        if (s.pollBusy && s.message.startsWith("인식: ")) {
+            val transcript = s.message.removePrefix("인식: ")
+            voice.stopListening()
+            val result = withContext(Dispatchers.IO) { PollBridge.generate(transcript) }
+            s.pollBusy = false
+            result.onSuccess { s.generatedPoll = it; s.vote = ""; s.message = "AI가 투표 안건을 만들었어요." }
+                .onFailure {
+                    s.message = if (it is ConnectException)
+                        "투표 생성 실패: PC에서 OpenAI 브리지(tools/openai_poll_bridge.py)를 실행해 주세요."
+                    else "투표 생성 실패: ${it.message ?: "OpenAI 브리지를 확인해 주세요."}"
+                }
+        }
+    }
     if (s.showSettings) AlertDialog(onDismissRequest = { s.showSettings = false },
         title = { Text("설정") }, text = {
-            Text("현재는 한 기기 시연입니다. 차량 간 연결·음성·음악은 API 연결 전까지 실제로 전송되지 않습니다.")
+            Text("현재는 한 기기 시연입니다. 원본 음성 녹음·재생은 이 기기에서 작동하지만 차량 간 음성 연결·음악은 아직 전송되지 않습니다.")
         }, confirmButton = { TextButton(onClick = { s.showSettings = false }) { Text("닫기") } })
     if (s.showEnd) AlertDialog(onDismissRequest = { s.showEnd = false },
         title = { Text("동행을 종료할까요?") },

@@ -21,7 +21,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun ColumnScope.WireDriving(s: WireSession, screen: WireScreen, wide: Boolean, enabled: Boolean) {
+internal fun ColumnScope.WireDriving(s: WireSession, screen: WireScreen, wide: Boolean, enabled: Boolean,
+    voice: LinkCarVoiceRuntime, onVoiceClick: () -> Unit) {
     if (screen == WireScreen.KNOCK_FULL) {
         WireKnockFull(s, enabled)
         return
@@ -44,12 +45,12 @@ internal fun ColumnScope.WireDriving(s: WireSession, screen: WireScreen, wide: B
     Spacer(Modifier.height(16.dp))
     if (wide) {
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            WireFeed(s, screen, enabled, Modifier.weight(1.9f).fillMaxHeight())
+            WireFeed(s, screen, enabled, Modifier.weight(1.9f).fillMaxHeight(), voice, onVoiceClick)
             WireCars(s, screen, enabled, Modifier.weight(1f).fillMaxHeight())
         }
     } else {
         Column(Modifier.weight(1f)) {
-            WireFeed(s, screen, enabled, Modifier.weight(1f).fillMaxWidth())
+            WireFeed(s, screen, enabled, Modifier.weight(1f).fillMaxWidth(), voice, onVoiceClick)
             WireCars(s, screen, enabled, Modifier.height(180.dp).fillMaxWidth())
         }
     }
@@ -105,7 +106,8 @@ private fun WireTrack(s: WireSession, expanded: Boolean, enabled: Boolean) {
 }
 
 @Composable
-private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modifier: Modifier) {
+private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modifier: Modifier,
+    voice: LinkCarVoiceRuntime, onVoiceClick: () -> Unit) {
     val compact = screen == WireScreen.MAP
     Column(modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
@@ -158,23 +160,23 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
                 WireSub("${s.knockTarget}  ·  휴게소 정차 중")
                 Spacer(Modifier.height(18.dp))
                 WireTitle("${s.knockTarget}가 지금은 문을 못 열어요")
-                WireSub("음성 메시지를 남기면 ${s.knockTarget} 화면에 글자로 먼저 보여요")
+                WireSub("원본 목소리를 녹음해 두면 시연 차량이 해당 지점을 지날 때 들려요")
                 Spacer(Modifier.height(22.dp))
                 WireButton("음성 메시지 남기기", {
-                    s.message = "휴게소에서 커피 사 갈게, 뭐 마실래?"
-                    s.open(WireScreen.VOICE_RECEIVED)
+                    onVoiceClick()
                 }, enabled = enabled, modifier = Modifier.fillMaxWidth())
             }
             WireScreen.VOICE_RECEIVED -> {
-                WireSub("B차 · 방금  ·  음성 메시지")
+                WireSub("내 차 · 방금 · 로컬 음성 메시지")
                 Spacer(Modifier.height(18.dp))
-                WireTitle(s.message.ifBlank { "휴게소에서 커피 사 갈게, 뭐 마실래?" })
+                WireTitle("길에 원본 목소리를 남겼어요")
                 Spacer(Modifier.height(20.dp))
                 WireButton("목소리로 듣기", {
-                    s.message = "음성 재생 API가 아직 연결되지 않았어요."
+                    voice.notes.notes.lastOrNull { it.id == s.lastNoteId }?.let { voice.play(it) }
+                        ?: run { s.message = "재생할 원본 음성이 없습니다." }
                 }, filled = false, enabled = enabled, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
-                WireSub("글자는 AI가 짧게 정리했어요 · 목소리는 원본 그대로")
+                WireSub("이 메시지는 로컬 시연 차량에서만 재생됩니다")
             }
             WireScreen.VOICE_APPROACH -> {
                 WireSub("C차 · 3분 전  ·  읽어 주는 중")
@@ -183,43 +185,69 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
                 WireSub("B차가 길에 남긴 음성 · 1.2km 앞")
             }
             WireScreen.VOICE_DELIVER -> {
-                WireSub("B차가 길에 남긴 음성 · 12분 전")
+                WireSub("로컬 시연 차량 · 녹음 지점 통과")
                 Spacer(Modifier.height(12.dp))
-                WireTitle("\"마지막에 오는 사람 여기 들러서 음료수 좀 사오기~\"")
+                WireTitle("녹음된 원본 목소리가 재생되고 있어요")
                 Spacer(Modifier.height(12.dp))
-                WireChip("○○ 편의점 청평점 · 오른쪽 300m 앞")
+                WireChip("저장된 지점 통과 · 로컬 시연")
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    WireButton("그냥 갈게요", { s.drive() }, filled = false,
+                    WireButton("닫기", { s.drive() }, filled = false,
                         enabled = enabled, modifier = Modifier.weight(1f))
-                    WireButton("들렀다 갈게요", { s.waypoint = true; s.drive() },
+                    WireButton("다시 듣기", {
+                        voice.notes.notes.lastOrNull { it.id == s.lastNoteId }?.let { voice.play(it) }
+                    },
                         enabled = enabled, modifier = Modifier.weight(1.4f))
                 }
             }
             else -> {
-                WireSub("B차 · 방금  ·  읽어 주는 중")
+                WireSub(if (s.generatedPoll != null) "내 차 · AI가 만든 투표 · 로컬 시연"
+                    else "B차 · 방금 · 읽어 주는 중")
                 Spacer(Modifier.height(if (compact) 6.dp else 18.dp))
-                WireTitle(if (s.vote == "accepted") "좋아요, 휴게소에서 만나요"
-                    else if (s.vote == "rejected") "다음에 들를게요"
-                    else "휴게소 들렀다 가자")
-                Spacer(Modifier.height(if (compact) 8.dp else 20.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    WireButton("다음에", { s.vote = "rejected" }, filled = false,
-                        enabled = enabled, modifier = Modifier.weight(1f), height = 88.dp)
-                    WireButton("좋아", { s.vote = "accepted"; s.waypoint = true },
-                        enabled = enabled, modifier = Modifier.weight(1.4f), height = 88.dp)
+                val poll = s.generatedPoll
+                if (poll != null) {
+                    WireTitle(poll.title)
+                    Spacer(Modifier.height(if (compact) 8.dp else 20.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        poll.options.forEach { option ->
+                            WireButton(option, { s.vote = option }, filled = s.vote == option,
+                                enabled = enabled, modifier = Modifier.weight(1f), height = 88.dp)
+                        }
+                    }
+                    if (s.vote.isNotEmpty()) WireSub("선택: ${s.vote} · 로컬 시연 투표")
+                } else {
+                    WireTitle(if (s.vote == "accepted") "좋아요, 휴게소에서 만나요"
+                        else if (s.vote == "rejected") "다음에 들를게요"
+                        else "휴게소 들렀다 가자")
+                    Spacer(Modifier.height(if (compact) 8.dp else 20.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        WireButton("다음에", { s.vote = "rejected" }, filled = false,
+                            enabled = enabled, modifier = Modifier.weight(1f), height = 88.dp)
+                        WireButton("좋아", { s.vote = "accepted"; s.waypoint = true },
+                            enabled = enabled, modifier = Modifier.weight(1.4f), height = 88.dp)
+                    }
                 }
                 if (!compact) {
                     Spacer(Modifier.height(10.dp))
-                    WireSub("제안일 때만 버튼이 함께 나타남 · 말로 \"좋아\"라고 해도 됨")
+                    WireSub(if (s.generatedPoll != null) "선택 결과는 이 기기에서만 표시됩니다"
+                        else "제안일 때만 버튼이 함께 나타남")
                 }
             }
+        }
+        if (s.message.isNotBlank()) WireSub(s.message)
+        if (voice.status != "마이크를 누르면 투표 제안이나 길 위 음성을 남길 수 있어요.") {
+            Spacer(Modifier.height(8.dp))
+            WireSub(voice.status)
+        }
+        if (voice.status.contains("STT") || voice.status.contains("음성 인식 오류")) {
+            Spacer(Modifier.height(8.dp))
+            WireButton("텍스트로 AI 투표 시험", { s.showPollTextEntry = true }, filled = false,
+                enabled = enabled, modifier = Modifier.fillMaxWidth(), height = 64.dp)
         }
         Spacer(Modifier.weight(1f))
         if (!compact && screen != WireScreen.CALL) {
             Surface(Modifier.fillMaxWidth().height(92.dp).clickable(enabled) {
-                s.vote = ""
-                s.drive()
+                onVoiceClick()
             }, color = Wire.muted, shape = RoundedCornerShape(Pleos215.RadiusLarge)) {
                 Row(Modifier.padding(horizontal = 26.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {

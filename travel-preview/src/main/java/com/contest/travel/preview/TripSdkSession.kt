@@ -266,7 +266,7 @@ internal class TripSdkSession(context: Context, private val onState: (LiveTripSt
     fun requestDestination() = routeRequest {
         requestedDestination = demoDestination
         it.requestRoute(RouteInfo(latitude = demoDestination.latitude, longitude = demoDestination.longitude,
-            poiName = "강릉 해변 · 같이가 시연", poiId = "", address = "강원특별자치도 강릉시", poiSubId = "0"))
+            poiName = "강릉 해변 · 링카 시연", poiId = "", address = "강원특별자치도 강릉시", poiSubId = "0"))
     }
 
     fun addRestStop() = routeRequest {

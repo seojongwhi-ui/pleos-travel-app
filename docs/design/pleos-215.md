@@ -48,7 +48,7 @@ Connect-S의 원본 값을 사용합니다. 아래 크기는 원본의 제작 �
 | `button/filled/pressed` | `#313236` | `#C7C9CE` |
 | `informative/positive` | `#0064FF` | `#0082FF` |
 
-버튼·패널·본문·아이콘은 원본의 중립 색상으로 변경하고 라이트/다크를 분리했습니다.
+공통 테마에는 라이트/다크 토큰이 있습니다. 현재 링카 와이어프레임 시연은 라이트 화면의 중립 색상을 사용합니다.
 지도 위 차량 표식과 앱 아이콘도 임의 주황색·남색 대신 제공된 색을 사용합니다. 회색 표식에는 어두운 글자로 대비를 확보합니다.
 실제 지도 타일의 지형·도로·지명은 외부 지도 데이터이며, 앱 UI의 컴포넌트 토큰과 구분합니다.
 지도 배경은 라이트에서 OpenFreeMap Liberty, 다크에서 OpenFreeMap Dark로 전환합니다.
@@ -58,7 +58,7 @@ Connect-S의 원본 값을 사용합니다. 아래 크기는 원본의 제작 �
 Display guide의 Connect-S 예시는 시스템의 운전자 영역과 앱 영역을 Landscape 1:2, Portrait 1:1:1로 설명합니다 (`2124:7105`, `2124:7115`).
 앱은 시스템이 할당한 Activity 크기에 반응합니다. Driving View·상태바·GNB를 앱 내부에 다시 만들지 않습니다.
 
-현재 같이가의 지도+일행 패널 배치는 여행 서비스에 맞춘 앱 구성입니다. 이를 공식 원본의 완성 화면 복사본으로 취급하지 않습니다.
+현재 링카의 화면 배치는 Figma 와이어프레임을 따릅니다. 이를 Pleos 공식 원본의 완성 화면 복사본으로 취급하지 않습니다.
 카드와 패널은 제공된 색상·모서리·타입 스케일을 조합합니다. 기존 자체 아이콘은 원본의 선 두께·그리드·round 규칙으로 정리하며 원본 에셋을 그대로 추출한 아이콘이라고 표시하지 않습니다.
 
 현재 AVD는 Connect-S 2560×1440입니다. 실제 앱 창은 넓은 창 약 1682×1210, 좁은 창 약 841×1210입니다.
@@ -67,8 +67,9 @@ Display guide의 Connect-S 예시는 시스템의 운전자 영역과 앱 영역
 ## 구현과 서체 출처
 
 - `PleosDesign215.kt`: 공통 서체·타입·색상·기본 크기.
-- `PreviewComponents.kt`: 일반·주요·비활성 버튼, 토글, 텍스트 버튼, 패널과 아이콘.
-- `TravelPreview.kt`: 시스템 앱 영역 안의 여백·상단 내비게이션·메뉴.
+- `LinkCarDemo.kt`: 와이어프레임 공통 버튼·패널·입력 필드와 화면 상태.
+- `LinkCarWireJourney.kt`, `LinkCarWireDrive.kt`, `LinkCarWireEnding.kt`: 와이어프레임 화면.
+- `TravelPreview.kt`: 시스템 앱 영역 안에서 링카 화면을 실행.
 - `RoadConvoyMap.kt`: 차량 이름의 Asta Sans, 표식 대비·색상.
 - `res/font/asta_sans.ttf`: 원본에서 지정한 Asta Sans의 공식 Google Fonts 배포본.
 - `assets/licenses/AstaSans-OFL.txt`: 서체에 동봉한 SIL Open Font License.
@@ -76,30 +77,16 @@ Display guide의 Connect-S 예시는 시스템의 운전자 영역과 앱 영역
 서체 배포 원문: [Google Fonts Asta Sans](https://github.com/google/fonts/tree/main/ofl/astasans).
 원본 서체 프로젝트: [42dot/Asta-Sans](https://github.com/42dot/Asta-Sans).
 
-기존 Vehicle/NaviHelper API, 데이터 상태 구분과 시연 로직은 디자인 적용과 별도로 유지합니다.
-실제 내비게이션 엔진, 차량 간 통신이나 음성 기능을 추가하는 작업은 포함하지 않습니다.
+기존 Vehicle/NaviHelper 연동 코드는 유지합니다. 링카 와이어프레임의 점수와 도착 시간은 아직 SDK 조회값에 연결하지 않았습니다.
+실제 내비게이션 엔진, 차량 간 통신이나 음성 기능은 현재 시연에 포함하지 않습니다.
 
 ## 이후 변경 확인
 
 `node tools/check-pleos-design.cjs`는 원본 파일의 지문(로컬 파일이 있을 때), UI 색상과 타입 스케일을 추출 데이터와 대조합니다.
 이미지 비교나 전체 가이드 적합성 인증을 대신하는 검사가 아닙니다. 배치·아이콘·실제 기기 동작은 별도로 확인합니다.
 
-## 2026-10-30 검증 결과
+## 2026-11-10 링카 와이어프레임 확인
 
-- `:travel-preview:assembleDebug`, `:travel-preview:lintDebug` 성공. Lint 오류 0개, 기존 경고 10개.
-- 원본 지문·색상·타입 스케일 대조 검사 통과.
-- Pleos Connect 2.1.0 AVD에서 넓은 창과 좁은 창의 라이트·다크 배치 확인.
-- 지도와 세 차량 이름, 패널 전환, 뒤로가기, 여행 만들기 화면 진입 확인.
-- 배터리 100%의 실제 조회와 트립 정보 등의 미지원 표시 유지 확인.
-- 가변 서체의 기본 굵기 300에 의존하지 않고 `wght` 400/700/800을 명시해 Regular/Bold/ExtraBold 구분 확인.
-- 다크 검증 후 에뮬레이터를 원래 라이트 설정으로 되돌림.
-- 원본의 시스템 팝업 모서리 48과 테마 배경을 적용한 뒤, 지도 출처 팝업 열기·닫기와 지도 복귀 확인. 최종 실행의 AndroidRuntime 오류 없음.
-
-| 창 | Light | Dark |
-|---|---|---|
-| 넓은 창 | [화면](../images/pleos215-wide-light.png) | [화면](../images/pleos215-wide-dark.png) |
-| 좁은 창 | [화면](../images/pleos215-narrow-light.png) | [화면](../images/pleos215-narrow-dark.png) |
-
-![현재 같이가 화면](../images/pleos215-wide-light.png)
-
-변경 사항은 로컬에 적용하며 이번 디자인 요청으로 GitHub에 자동 업로드하지 않습니다.
+- `:travel-preview:assembleDebug`와 원본 지문·색상·타입 스케일 검사를 통과했습니다.
+- Pleos Connect-S의 넓은 앱 영역에서 홈→여행 만들기→초대→대기실→주행 화면을 확인했습니다.
+- 좁은 앱 영역과 다크 모드는 이번 와이어프레임 교체의 검증 범위에 포함되지 않았습니다.

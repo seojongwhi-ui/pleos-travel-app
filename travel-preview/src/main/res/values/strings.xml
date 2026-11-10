@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">같이가 미리보기</string>
+    <string name="app_name">링카</string>
     <color name="launcher_background">#0064FF</color>
     <style name="Theme.TravelPreview" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">@font/asta_sans</item>

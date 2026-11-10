@@ -1,28 +1,26 @@
-# 같이가 — Pleos 여행 앱 개발 미리보기
+# 링카(LinkCar) — Pleos 여행 앱 개발 미리보기
 
 여러 대의 차가 같은 목적지를 향해 함께 여행하는 경험을 위한 Android Automotive 앱입니다.
-별도 `:travel-preview` 모듈에 차량 상태 조회, 앱 안 도로 지도와 로컬 일행 이동 시연을 구현했습니다.
+별도 `:travel-preview` 모듈에 피그마 와이어프레임을 따른 21개 화면, 앱 안 도로 지도와 로컬 일행 이동 시연을 구현했습니다.
 현재 UI는 사용자가 제공한 Pleos Connect 2.1.5 디자인 원본을 기준으로 합니다. [디자인 기준과 출처](docs/design/pleos-215.md)를 참고하세요.
 
-- 여행 홈·일정·일행·대화·추억 패널을 열면서 지도를 유지합니다.
-- Vehicle SDK 2.3.2와 NaviHelper 3.0.5로 실제 차량·내비 정보를 조회하고, 미지원·오류를 구분합니다.
-- 일행 두 차량은 로컬 시연입니다. 실제 차량 간 위치 공유·음성 대화·AI·앨범, 앱 자체의 회전 안내·재탐색은 아직 구현 전입니다.
+- 현재 실행 화면은 Figma 와이어프레임의 홈·여행 만들기·초대·출발 준비·주행·도착 흐름으로 교체했습니다. 뒤로가기와 화면 간 선택은 동작합니다.
+- 주행 화면의 지도 확대에는 도로 지도와 로컬 일행 위치를 표시합니다. 차량 간 위치 공유·음성 대화·음원 재생·실제 경로 안내는 API 연결 전 시연 상태입니다.
+- Vehicle SDK 2.3.2와 NaviHelper 3.0.5의 기존 연동 코드는 프로젝트에 남아 있지만, 새 와이어프레임 화면의 점수·도착 시간에는 아직 연결하지 않았습니다.
 
 ## 실행 방법과 테스트 환경
 
 JDK 17과 Android SDK 35로 `./gradlew :travel-preview:assembleDebug`를 실행합니다.
 Windows에서는 `./gradlew.bat :travel-preview:assembleDebug`를 사용할 수 있습니다.
-생성된 APK를 Pleos 에뮬레이터에 설치한 뒤 **같이가 미리보기 → 예시 여행 열기**로 확인합니다.
+생성된 APK를 Pleos 에뮬레이터에 설치한 뒤 **링카 앱 아이콘**을 누르면 시연 홈이 바로 열립니다.
 
 - 확인 환경: Pleos Connect 2.1.0 / Android 14 / Vehicle Service 2.3.22.
 - 도로 지도 다운로드에는 인터넷 연결이 필요합니다. 현재는 주차 상태의 개발 시연입니다.
 - 개발용 APK 생성 위치: `travel-preview/build/outputs/apk/debug/travel-preview-debug.apk`.
   APK는 빌드 산출물이므로 Git에 포함하지 않으며, 공모전 제출용 서명된 release APK는 아직 준비 전입니다.
-- 검증: debug APK 빌드·설치, 넓은 창·좁은 창 동작, JUnit 5개 통과, Lint 오류 0개(경고 10개).
+- 이번 와이어프레임 교체 검증: debug APK 빌드·설치, Connect-S 홈→주행 화면 이동, Pleos 디자인 검사 통과.
 
-[프로젝트 안내](START_HERE.md) · [차량 연동과 지도 사용법](docs/같이가_차량연동과_로컬일행지도.md)
-
-![Pleos Connect 2.1.5 기준을 적용한 같이가 지도와 일행 패널](docs/images/pleos215-wide-light.png)
+[프로젝트 안내](START_HERE.md) · [링카 시연과 API 연결 지점](docs/linkcar-demo-api-slots.md)
 
 아래는 기반으로 사용한 공식 SDK 샘플의 설명입니다.
 

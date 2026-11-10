@@ -38,6 +38,9 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
+internal val convoyColors = listOf(Pleos215.Positive, Pleos215.Gray400, Pleos215.Filled)
+internal val convoyNames = listOf("내 차", "B차", "C차")
+
 /** A road map renderer, not a route calculation or turn-by-turn navigation engine. */
 @Composable
 internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Boolean, modifier: Modifier) {
@@ -97,7 +100,7 @@ internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Bool
         AndroidView(factory = { bridge.view }, modifier = Modifier.weight(1f).fillMaxWidth(),
             update = {
                 it.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-                it.contentDescription = "같이가 도로 지도. 갱신 ${convoy.revision}회. " +
+                it.contentDescription = "링카 도로 지도. 갱신 ${convoy.revision}회. " +
                     cars.mapIndexed { i, p -> "${convoyNames[i]} ${p?.let(::formatPoint) ?: "위치 없음"}" }.joinToString(". ")
                 bridge.map?.uiSettings?.setAllGesturesEnabled(enabled)
             })
@@ -127,6 +130,16 @@ internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Bool
                 creditLinkError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall) }
             }
         }, confirmButton = { PleosTextButton(onClick = { showCredits = false }) { Text("닫기", style = MaterialTheme.typography.labelMedium) } })
+}
+
+@Composable
+private fun PleosTextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+    content: @Composable RowScope.() -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = Pleos215.ButtonMedium),
+        shape = RoundedCornerShape(Pleos215.RadiusMedium), contentPadding = contentPadding,
+        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface,
+            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .32f)), content = content)
 }
 
 private class RoadMapBridge(val view: MapView) {

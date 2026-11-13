@@ -22,7 +22,11 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun ColumnScope.WireDriving(s: WireSession, screen: WireScreen, wide: Boolean, enabled: Boolean,
-    voice: LinkCarVoiceRuntime, onVoiceClick: () -> Unit) {
+    voice: LinkCarVoiceRuntime, designWide: Boolean, onVoiceClick: () -> Unit) {
+    if (screen.isDriving && designWide) {
+        DesignedDriveScreen(s, screen, enabled, voice, onVoiceClick)
+        return
+    }
     if (screen == WireScreen.KNOCK_FULL) {
         WireKnockFull(s, enabled)
         return
@@ -119,6 +123,22 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
         }
         Spacer(Modifier.height(if (compact) 12.dp else 26.dp))
         when (screen) {
+            WireScreen.INCOMING_CALL -> {
+                WireSub("${s.incomingCaller} · 전화 수신 시연")
+                Spacer(Modifier.height(18.dp))
+                WireTitle("${s.incomingCaller}에서 전화가 왔어요")
+                WireSub(if (s.incomingCaller == "문준 차")
+                    "${s.seconds}초 후 자동으로 거절돼요" else "${s.seconds}초 안에 전화 받기를 눌러 주세요")
+                Spacer(Modifier.height(22.dp))
+                WireButton(if (s.incomingCaller == "다연 차") "전화 받기" else "전화 거절",
+                    if (s.incomingCaller == "다연 차") s::acceptIncomingCall
+                    else s::declineIncomingCall, enabled = enabled,
+                    modifier = Modifier.fillMaxWidth())
+            }
+            WireScreen.CALL_DECLINED -> {
+                WireTitle("문준 차의 전화를 거절했어요")
+                WireSub("잠시 후 주행 화면으로 돌아가요 · 시연")
+            }
             WireScreen.KNOCK_SENT -> {
                 WireSub("${s.knockTarget}  ·  노크 보내는 중")
                 Spacer(Modifier.height(18.dp))
@@ -130,14 +150,14 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
                 WireSub("${s.seconds}초")
             }
             WireScreen.KNOCK_RECEIVED -> {
-                WireSub("B차  ·  주행 중")
+                WireSub("다연 차  ·  주행 중")
                 Spacer(Modifier.height(18.dp))
-                WireTitle("B차가 노크했어요", Modifier.clickable(enabled) { s.open(WireScreen.KNOCK_FULL) })
+                WireTitle("다연 차가 노크했어요", Modifier.clickable(enabled) { s.open(WireScreen.KNOCK_FULL) })
                 Spacer(Modifier.height(18.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     WireButton("지금은 어려워요", { s.drive() }, filled = false,
                         enabled = enabled, modifier = Modifier.weight(1f))
-                    WireButton("문 열고 대화하기", { s.open(WireScreen.CALL) },
+                    WireButton("문 열고 대화하기", s::startKnockCall,
                         enabled = enabled, modifier = Modifier.weight(1.6f))
                 }
                 Spacer(Modifier.height(12.dp))
@@ -148,7 +168,7 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
                     Text("${s.seconds}", style = MaterialTheme.typography.displayLarge, color = Wire.action)
                     Spacer(Modifier.width(22.dp))
                     Column {
-                        WireTitle("B차와 대화 중")
+                        WireTitle("${s.incomingCaller}와 대화 중 · 시연")
                         WireSub("30초가 지나면 자동으로 끝나요")
                     }
                 }
@@ -179,10 +199,10 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
                 WireSub("이 메시지는 로컬 시연 차량에서만 재생됩니다")
             }
             WireScreen.VOICE_APPROACH -> {
-                WireSub("C차 · 3분 전  ·  읽어 주는 중")
+                WireSub("문준 차 · 3분 전  ·  읽어 주는 중")
                 Spacer(Modifier.height(18.dp))
                 WireTitle("이 노래 누가 신청했어? 좋다")
-                WireSub("B차가 길에 남긴 음성 · 1.2km 앞")
+                WireSub("다연 차가 길에 남긴 음성 · 1.2km 앞")
             }
             WireScreen.VOICE_DELIVER -> {
                 WireSub("로컬 시연 차량 · 녹음 지점 통과")
@@ -202,7 +222,7 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
             }
             else -> {
                 WireSub(if (s.generatedPoll != null) "내 차 · AI가 만든 투표 · 로컬 시연"
-                    else "B차 · 방금 · 읽어 주는 중")
+                    else "다연 차 · 방금 · 읽어 주는 중")
                 Spacer(Modifier.height(if (compact) 6.dp else 18.dp))
                 val poll = s.generatedPoll
                 if (poll != null) {
@@ -279,7 +299,7 @@ private fun WireMic(modifier: Modifier) {
 @Composable
 private fun WireCars(s: WireSession, screen: WireScreen, enabled: Boolean, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        listOf("B차", "C차").forEachIndexed { index, name ->
+        listOf("다연 차", "문준 차").forEachIndexed { index, name ->
             Surface(Modifier.fillMaxWidth().weight(1f), color = Wire.muted,
                 shape = RoundedCornerShape(Pleos215.RadiusLarge),
                 border = if (screen == WireScreen.VOICE_DELIVER && index == 0)
@@ -295,12 +315,11 @@ private fun WireCars(s: WireSession, screen: WireScreen, enabled: Boolean, modif
                     }
                     WireButton(when {
                         screen == WireScreen.KNOCK_SENT && name == s.knockTarget -> "응답 기다리는 중"
-                        screen == WireScreen.CALL && name == "B차" -> "대화 중"
+                        screen == WireScreen.CALL && name == "다연 차" -> "대화 중"
                         screen == WireScreen.VOICE_LEAVE && name == s.knockTarget -> "1분 뒤 다시 노크"
                         else -> "두드리기"
                     }, {
-                        s.knockTarget = name
-                        s.open(WireScreen.KNOCK_SENT)
+                        s.sendKnock(name)
                     }, enabled = enabled && screen !in setOf(WireScreen.KNOCK_SENT, WireScreen.CALL),
                         width = 176.dp, height = 84.dp)
                 }
@@ -329,7 +348,7 @@ private fun WireDj(s: WireSession, expanded: Boolean, enabled: Boolean) {
                 WireSub(if (expanded) "M3 함께 듣는 DJ · 다시 탭하면 원래 크기" else "M3 함께 듣는 DJ")
                 Text(if (s.music) listOf("밤편지", "여행", "좋은 밤")[s.song] else "재생할 곡 없음",
                     style = MaterialTheme.typography.titleLarge, color = Wire.ink)
-                WireSub(if (s.music) "아이유 · 도윤님이 골랐어요" else "음악 없이 출발했어요")
+                WireSub(if (s.music) "아이유 · 문준님이 골랐어요" else "음악 없이 출발했어요")
             }
             LinearProgressIndicator(progress = { .4f }, modifier = Modifier.width(200.dp),
                 color = Wire.action, trackColor = Wire.mutedStrong)
@@ -357,17 +376,17 @@ private fun WireKnockFull(s: WireSession, enabled: Boolean) {
         Text("${s.seconds}초", Modifier.align(Alignment.CenterHorizontally),
             style = MaterialTheme.typography.displayLarge, color = Wire.action)
         Spacer(Modifier.height(20.dp))
-        WireAvatar("민지", 160.dp, Modifier.align(Alignment.CenterHorizontally))
+        WireAvatar("다연", 160.dp, Modifier.align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(16.dp))
-        WireSub("민지  ·  B차 · 쏘렌토  ·  혼자 운전  ·  주행 중",
+        WireSub("다연  ·  다연 차 · 쏘렌토  ·  혼자 운전  ·  주행 중",
             Modifier.align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(18.dp))
         WireTitle("노크 왔어요", Modifier.align(Alignment.CenterHorizontally))
-        WireSub("민지님이 노크했어요 · 문을 열면 30초 동안 바로 이야기할 수 있어요",
+        WireSub("다연님이 노크했어요 · 문을 열면 30초 동안 바로 이야기할 수 있어요",
             Modifier.align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(25.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            WireButton("문 열고 대화하기", { s.open(WireScreen.CALL) },
+            WireButton("문 열고 대화하기", s::startKnockCall,
                 enabled = enabled, modifier = Modifier.weight(1.7f))
             WireButton("지금은 어려워요", { s.drive() }, filled = false,
                 enabled = enabled, modifier = Modifier.weight(1f))

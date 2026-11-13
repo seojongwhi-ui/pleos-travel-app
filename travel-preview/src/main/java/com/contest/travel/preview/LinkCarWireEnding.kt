@@ -28,7 +28,7 @@ private fun ColumnScope.WireArrived(s: WireSession, enabled: Boolean) {
         Spacer(Modifier.weight(1f))
         Row(Modifier.align(Alignment.CenterHorizontally),
             horizontalArrangement = Arrangement.spacedBy((-12).dp)) {
-            listOf("민지", "도윤", "나").forEach { WireAvatar(it, 140.dp) }
+            listOf("다연", "문준", "나").forEach { WireAvatar(it, 140.dp) }
         }
         Spacer(Modifier.height(26.dp))
         WireTitle("모두 도착했어요!", Modifier.align(Alignment.CenterHorizontally))
@@ -36,8 +36,8 @@ private fun ColumnScope.WireArrived(s: WireSession, enabled: Boolean) {
             Modifier.align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(25.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            listOf(Triple("1", "민지", "15:31 도착"),
-                Triple("2", "도윤", "15:44 도착"), Triple("3", "나", "15:52 · 방금")).forEach { (rank, name, time) ->
+            listOf(Triple("1", "다연", "15:31 도착"),
+                Triple("2", "문준", "15:44 도착"), Triple("3", "나", "15:52 · 방금")).forEach { (rank, name, time) ->
                 Surface(Modifier.weight(1f), color = Wire.muted,
                     shape = RoundedCornerShape(Pleos215.RadiusMedium)) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
@@ -76,7 +76,7 @@ private fun ColumnScope.WireSummary(s: WireSession, wide: Boolean, enabled: Bool
             Spacer(Modifier.height(18.dp))
             Row(Modifier.fillMaxWidth().height(350.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.Bottom) {
-                listOf(Triple("2", "민지", "92점"), Triple("1", "도윤", "96점"),
+                listOf(Triple("2", "다연", "92점"), Triple("1", "문준", "96점"),
                     Triple("3", "나", "85점")).forEach { (rank, name, score) ->
                     val height = when (rank) { "1" -> 270.dp; "2" -> 220.dp; else -> 190.dp }
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -94,8 +94,8 @@ private fun ColumnScope.WireSummary(s: WireSession, wide: Boolean, enabled: Bool
             Spacer(Modifier.height(18.dp))
             WireSub("차                 주행 거리               걸린 시간                 감점")
             Spacer(Modifier.height(10.dp))
-            listOf("도윤  ·  82.4km  ·  1시간 28분  ·  급제동 1 · 급가속 1",
-                "민지  ·  81.9km  ·  1시간 15분  ·  급제동 1 · 과속 1",
+            listOf("문준  ·  82.4km  ·  1시간 28분  ·  급제동 1 · 급가속 1",
+                "다연  ·  81.9km  ·  1시간 15분  ·  급제동 1 · 과속 1",
                 "나  ·  83.1km  ·  1시간 36분  ·  급제동 2 · 과속 2").forEach {
                 WireRow(it, "", Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
@@ -105,7 +105,7 @@ private fun ColumnScope.WireSummary(s: WireSession, wide: Boolean, enabled: Bool
             Text("AI 하이라이트", style = MaterialTheme.typography.titleLarge, color = Wire.ink)
             Spacer(Modifier.height(16.dp))
             listOf("\"호두과자 먹자\" 3:0 만장일치로 청평휴게소 들름",
-                "민지님이 길에 남긴 음성 \"음료수 좀 사오기~\"",
+                "다연님이 길에 남긴 음성 \"음료수 좀 사오기~\"",
                 "가장 많이 함께 부른 곡 · 밤편지").forEach {
                 WireRow(it, "", Modifier.fillMaxWidth())
                 Spacer(Modifier.height(10.dp))
@@ -145,9 +145,9 @@ private fun ColumnScope.WireSave(s: WireSession, enabled: Boolean) {
                 WireSub("${s.purpose} · 11월 5일 · 83.1km · 1시간 36분")
                 Spacer(Modifier.height(20.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    listOf("민지", "도윤", "나").forEach { WireAvatar(it, 56.dp) }
+                    listOf("다연", "문준", "나").forEach { WireAvatar(it, 56.dp) }
                     Spacer(Modifier.width(16.dp))
-                    Text("민지 · 도윤 · 나", style = MaterialTheme.typography.labelMedium, color = Wire.ink)
+                    Text("다연 · 문준 · 나", style = MaterialTheme.typography.labelMedium, color = Wire.ink)
                     Spacer(Modifier.width(16.dp))
                     WireChip("내 순위 3위 · 85점")
                 }

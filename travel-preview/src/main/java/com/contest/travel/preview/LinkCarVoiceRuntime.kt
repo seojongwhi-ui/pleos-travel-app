@@ -176,10 +176,15 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
     }
 
     fun play(note: RoadVoiceNote, car: String? = null) {
+        val displayCar = when (car) {
+            "B차" -> "다연 차"
+            "C차" -> "문준 차"
+            else -> car
+        }
         audio.play(notes.file(note)) {
-            status = if (car == null) "원본 음성 재생 완료" else "$car 시연 차량의 통과 재생 완료"
+            status = if (car == null) "원본 음성 재생 완료" else "$displayCar 시연 차량의 통과 재생 완료"
         }.onSuccess {
-            status = if (car == null) "저장된 원본 음성을 재생합니다." else "$car 시연 차량이 녹음 지점을 지나 원본 음성을 재생합니다."
+            status = if (car == null) "저장된 원본 음성을 재생합니다." else "$displayCar 시연 차량이 녹음 지점을 지나 원본 음성을 재생합니다."
             if (car != null) notes.markPlayed(note.id, car)
         }.onFailure { status = "음성 재생 실패: ${it.message}" }
     }

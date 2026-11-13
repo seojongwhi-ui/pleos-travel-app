@@ -189,7 +189,7 @@ internal class TripSdkSession(context: Context, private val onState: (LiveTripSt
                     if (valid && requestedDestination?.let { distanceMeters(it, point) < 1500 } == true) {
                         pending.remove("route")
                         requestedDestination = null
-                        update { it.copy(routePending = false, routeMessage = "강릉 목적지 반영을 확인했습니다") }
+                        update { it.copy(routePending = false, routeMessage = "가평 목적지 반영을 확인했습니다") }
                     }
                     Log.i("GatigaSDK", "destination received valid=$valid distance=${info.remainDistance} time=${info.remainTime}")
                 }
@@ -266,7 +266,7 @@ internal class TripSdkSession(context: Context, private val onState: (LiveTripSt
     fun requestDestination() = routeRequest {
         requestedDestination = demoDestination
         it.requestRoute(RouteInfo(latitude = demoDestination.latitude, longitude = demoDestination.longitude,
-            poiName = "강릉 해변 · 링카 시연", poiId = "", address = "강원특별자치도 강릉시", poiSubId = "0"))
+            poiName = "가평 계곡 · 링카 시연", poiId = "", address = "경기도 가평군", poiSubId = "0"))
     }
 
     fun addRestStop() = routeRequest {

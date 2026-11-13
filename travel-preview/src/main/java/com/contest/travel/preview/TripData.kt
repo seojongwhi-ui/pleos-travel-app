@@ -41,8 +41,10 @@ internal data class TripActions(
     val addRestStop: () -> Unit = {}
 )
 
-internal val demoDestination = GeoPoint(37.795, 128.918)
-internal val demoRestStop = GeoPoint(37.877, 127.553)
+// Approximate Gapyeong valley area for the local demonstration. A real route
+// must come from the selected destination and the navigation/Directions SDK.
+internal val demoDestination = GeoPoint(37.840, 127.525)
+internal val demoRestStop = GeoPoint(37.760, 127.500)
 
 // When real location is selected, a failed read must never become a simulated car.
 internal fun convoyMapPositions(progress: Double, useRealCar: Boolean, location: Reading<GeoPoint>): List<GeoPoint?> =
@@ -55,9 +57,7 @@ internal fun convoyMapPositions(progress: Double, useRealCar: Boolean, location:
 internal val demoRoute = listOf(
     GeoPoint(37.5665, 126.978), GeoPoint(37.600, 127.100),
     GeoPoint(37.650, 127.300), GeoPoint(37.760, 127.500),
-    GeoPoint(37.780, 127.700), GeoPoint(37.700, 127.950),
-    GeoPoint(37.620, 128.180), GeoPoint(37.630, 128.420),
-    GeoPoint(37.670, 128.650), GeoPoint(37.720, 128.800), demoDestination
+    demoDestination
 )
 
 internal fun distanceMeters(a: GeoPoint, b: GeoPoint): Double {

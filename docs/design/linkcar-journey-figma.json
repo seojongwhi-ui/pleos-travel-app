@@ -1,0 +1,16 @@
+{
+  "file": "LinkCarFigmaJourneyExact.kt",
+  "sourceFileKey": "c3q0MskWTtRP5gE9WspRVo",
+  "sourceNodes": ["349:15776", "328:9037", "328:4625", "328:9125", "328:9223", "328:9335", "328:9457", "328:9553"],
+  "font": "Pretendard Variable",
+  "colors": [
+    "#131417", "#191A1B", "#5263E7", "#8F919F", "#96A2FF",
+    "#ADB5C5", "#C4CCE4", "#CDD6FF", "#D4BA63", "#E0E1E6",
+    "#E2E4EB", "#E5E5FF", "#E5E8FF", "#E7EAF2", "#E9EBF2", "#EBEDF6", "#EDEEF2",
+    "#F1F4FF", "#F3F4F8", "#FF7777", "#FFB258"
+  ],
+  "implementationColors": [
+    "#EBEAFB", "#D3D1FF", "#EEEDFF", "#DED9FF", "#EEEDFB",
+    "#B5EFF0", "#F0D4F8", "#ACB1C0", "#E8E9EF"
+  ]
+}

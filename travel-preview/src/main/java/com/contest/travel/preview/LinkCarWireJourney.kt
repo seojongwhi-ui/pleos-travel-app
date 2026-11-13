@@ -36,7 +36,7 @@ internal fun WireInvite(s: WireSession, enabled: Boolean) {
             WireSub("최근 함께한 사람")
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                listOf("민지", "도윤", "서연", "현우", "지아", "준호").forEach { name ->
+                listOf("다연", "문준", "성윤", "민석", "현진", "준호").forEach { name ->
                     val chosen = name in s.invitees
                     Column(Modifier.clickable(enabled) {
                         s.invitees = if (chosen) s.invitees - name
@@ -94,7 +94,7 @@ internal fun ColumnScope.WireWaiting(s: WireSession, wide: Boolean, enabled: Boo
     }
     Spacer(Modifier.height(16.dp))
     Row(Modifier.fillMaxWidth().weight(.41f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        listOf("나", "민지", "도윤", "초대하기").forEachIndexed { index, name ->
+        listOf("나", "다연", "문준", "초대하기").forEachIndexed { index, name ->
             Surface(Modifier.weight(1f).fillMaxHeight().then(
                 if (index == 3) Modifier.clickable(enabled) { s.open(WireScreen.INVITE) } else Modifier),
                 color = if (index == 3) Wire.muted else Wire.surface,
@@ -112,8 +112,8 @@ internal fun ColumnScope.WireWaiting(s: WireSession, wide: Boolean, enabled: Boo
                         Text(name, style = MaterialTheme.typography.titleLarge, color = Wire.ink)
                         WireSub(when (index) {
                             0 -> "내 차 · 아이오닉 5"
-                            1 -> "B차 · 쏘렌토"
-                            else -> "C차 · 아반떼"
+                            1 -> "다연 차 · 쏘렌토"
+                            else -> "문준 차 · 아반떼"
                         })
                         Spacer(Modifier.height(6.dp))
                         WireChip(when (index) {
@@ -192,12 +192,12 @@ internal fun ColumnScope.WireMusicPick(s: WireSession, wide: Boolean, enabled: B
             Box(Modifier.size(260.dp).background(Wire.muted, CircleShape)
                 .align(Alignment.CenterHorizontally), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    WireAvatar("도윤", 86.dp)
+                    WireAvatar("문준", 86.dp)
                     Text("당첨!  AI 무작위", style = MaterialTheme.typography.labelMedium, color = Wire.ink)
                 }
             }
             Spacer(Modifier.height(22.dp))
-            WireTitle("도윤님이 첫 곡을 골랐어요!", Modifier.align(Alignment.CenterHorizontally))
+            WireTitle("문준님이 첫 곡을 골랐어요!", Modifier.align(Alignment.CenterHorizontally))
             WireSub("뽑힌 차가 말로 신청하면 모든 차에서 함께 재생돼요",
                 Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.weight(1f))
@@ -211,12 +211,12 @@ internal fun ColumnScope.WireMusicPick(s: WireSession, wide: Boolean, enabled: B
             }
             Spacer(Modifier.height(16.dp))
             WireTitle("밤편지")
-            WireSub("아이유 · 도윤님이 골랐어요")
+            WireSub("아이유 · 문준님이 골랐어요")
             Spacer(Modifier.height(14.dp))
             LinearProgressIndicator(progress = { .18f }, modifier = Modifier.fillMaxWidth(),
                 color = Wire.action, trackColor = Wire.muted)
             Spacer(Modifier.weight(1f))
-            WireSub("함께 듣는 차   나 · 민지 · 도윤   3대")
+            WireSub("함께 듣는 차   나 · 다연 · 문준   3대")
         }
     }
     Spacer(Modifier.height(16.dp))
@@ -244,7 +244,7 @@ internal fun WireFirstSong(s: WireSession, wide: Boolean, enabled: Boolean) {
                 WireSub("지금 함께 듣는 첫 곡")
                 Spacer(Modifier.height(8.dp))
                 WireTitle("밤편지")
-                WireSub("아이유 · 도윤님이 골랐어요")
+                WireSub("아이유 · 문준님이 골랐어요")
                 Spacer(Modifier.height(18.dp))
                 LinearProgressIndicator(progress = { .1f }, modifier = Modifier.fillMaxWidth(),
                     color = Wire.action, trackColor = Wire.muted)

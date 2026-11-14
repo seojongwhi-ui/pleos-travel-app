@@ -19,10 +19,11 @@ import androidx.compose.ui.unit.dp
 /** The LinkCar wireframes are the only app-facing flow in the preview module. */
 @Composable
 internal fun TravelPreview(drivingUx: DrivingUxState, liveTrip: LiveTripState,
+    motion: VehicleMotionState,
     actions: TripActions, foreground: Boolean) {
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) PleosDark else PleosLight,
         typography = PleosTypography) {
-        val convoy = rememberConvoyController(foreground)
+        val convoy = rememberConvoyController(motion)
         val context = LocalContext.current
         CompositionLocalProvider(LocalTripLive provides liveTrip, LocalTripActions provides actions,
             LocalConvoy provides convoy) {
@@ -38,6 +39,7 @@ internal fun TravelPreview(drivingUx: DrivingUxState, liveTrip: LiveTripState,
                         }
                         LinkCarDemoScreen(wide = wide,
                             enabled = drivingUx.canInteract,
+                            setupRestricted = drivingUx.setupRestricted,
                             foreground = foreground,
                             onExit = { (context as? Activity)?.finish() },
                             modifier = Modifier.weight(1f))

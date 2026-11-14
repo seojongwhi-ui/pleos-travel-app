@@ -3,12 +3,16 @@ package com.contest.travel.preview
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -31,19 +36,28 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -57,6 +71,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import android.os.SystemClock
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sin
+import kotlinx.coroutines.delay
 
 /** S-10 / Figma 328:5199, adapted to the Connect-S app activity region. */
 private object DriveDesign {
@@ -83,45 +102,134 @@ private object DriveDesign {
 
 @Composable
 internal fun DesignedDriveScreen(s: WireSession, screen: WireScreen, enabled: Boolean,
-    voice: LinkCarVoiceRuntime, onVoiceClick: () -> Unit) {
+    setupRestricted: Boolean,
+    voice: LinkCarVoiceRuntime, onVoiceClick: () -> Unit, onResetDemo: () -> Unit,
+    onPollSpeech: () -> Unit) {
+    val density = LocalDensity.current.density
+    val canResize = enabled && !s.showVoiceRecorder &&
+        screen in setOf(WireScreen.DRIVE, WireScreen.MAP, WireScreen.DJ)
+    var mapDragging by remember { mutableStateOf(false) }
+    var musicDragging by remember { mutableStateOf(false) }
+    var companionsDragging by remember { mutableStateOf(false) }
+    var mapTarget by remember { mutableFloatStateOf(if (screen == WireScreen.MAP) 560f else 165f) }
+    var musicTarget by remember { mutableFloatStateOf(if (screen == WireScreen.DJ) 500f else 200f) }
+    var companionsTarget by remember { mutableFloatStateOf(if (s.companionsExpanded) 900f else 614f) }
+    LaunchedEffect(screen) {
+        mapTarget = if (screen == WireScreen.MAP) 560f else 165f
+        musicTarget = if (screen == WireScreen.DJ) 500f else 200f
+    }
+    LaunchedEffect(s.companionsExpanded) {
+        companionsTarget = if (s.companionsExpanded) 900f else 614f
+    }
+    val mapHeight by animateFloatAsState(mapTarget,
+        animationSpec = if (mapDragging) snap() else tween(300), label = "지도 크기")
+    val musicHeight by animateFloatAsState(musicTarget,
+        animationSpec = if (musicDragging) snap() else tween(300), label = "음악 크기")
+    val companionsWeight by animateFloatAsState(companionsTarget,
+        animationSpec = if (companionsDragging) snap() else tween(300), label = "차량 목록 너비")
+    val mapOpen = mapHeight >= 280f
+    val musicOpen = musicHeight >= 300f
+    LaunchedEffect(s.speechFeedbackVisible, voice.status) {
+        if (s.speechFeedbackVisible &&
+            (voice.status.contains("오류") || voice.status.contains("실패") ||
+                voice.status.contains("인식하지 못"))) {
+            delay(10_000)
+            s.speechFeedbackVisible = false
+        }
+    }
+
     Column(Modifier.fillMaxSize().background(Brush.linearGradient(
         listOf(DriveDesign.GradientStart, DriveDesign.GradientEnd)))) {
-        DesignedDriveHeader(s, enabled)
+        DesignedDriveHeader(s, enabled && !setupRestricted)
         Spacer(Modifier.height(16.dp))
-        if (screen == WireScreen.MAP) {
-            Surface(Modifier.fillMaxWidth().height(560.dp).padding(horizontal = 12.dp)
-                .clickable(enabled) { s.drive() }, color = Color.White,
-                shape = RoundedCornerShape(48.dp)) {
-                RoadConvoyMap(overview = true, cameraRevision = 0, enabled = enabled,
-                    modifier = Modifier.fillMaxSize())
-            }
-            Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                DesignedMapVoice(s, enabled, onVoiceClick,
-                    Modifier.weight(1022f).fillMaxHeight())
-                DesignedMapCompanions(s, enabled, Modifier.weight(614f).fillMaxHeight())
-            }
-            Spacer(Modifier.height(16.dp))
-            DesignedMusicBar(s, enabled)
-            return@Column
-        }
-        DesignedRouteStrip(s, enabled)
-        Spacer(Modifier.height(24.dp))
-        Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (screen == WireScreen.DJ) {
-                DesignedCompactVoice(s, enabled, onVoiceClick, Modifier.weight(1022f).fillMaxHeight())
-                DesignedCompactCompanions(s, enabled, Modifier.weight(614f).fillMaxHeight())
+        Box(Modifier.fillMaxWidth().height(mapHeight.dp)) {
+            if (mapOpen) {
+                Surface(Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                    color = Color.White,
+                    shape = RoundedCornerShape(48.dp)) {
+                    RoadConvoyMap(overview = true, cameraRevision = 0, enabled = enabled,
+                        modifier = Modifier.fillMaxSize(), voiceMarkerVisible = voice.notes.hasDemoMarker)
+                }
+                MapResetButton(enabled, onResetDemo,
+                    Modifier.align(Alignment.TopStart).padding(start = 28.dp, top = 12.dp))
             } else {
-                DesignedVoiceCard(s, screen, enabled, voice, onVoiceClick,
-                    Modifier.weight(1022f).fillMaxHeight())
-                DesignedCompanions(s, screen, enabled, Modifier.weight(614f).fillMaxHeight())
+                DesignedRouteStrip(s, voice.notes.hasDemoMarker, mapHeight.dp,
+                    enabled, onResetDemo)
+            }
+            DriveResizeGrip(GripAxis.VERTICAL, "지도를 아래로 끌어 펼치거나 위로 끌어 접기",
+                canResize && screen != WireScreen.DJ,
+                Modifier.align(Alignment.BottomCenter), barOffsetY = 8.dp,
+                onDrag = { delta ->
+                    mapDragging = true
+                    mapTarget = (mapTarget + delta / density).coerceIn(165f, 560f)
+                }, onRelease = { total ->
+                    mapDragging = false
+                    val expanded = if (screen == WireScreen.MAP) total >= -56f * density
+                        else total > 56f * density
+                    if (expanded && screen != WireScreen.MAP) {
+                        s.drive()
+                        s.open(WireScreen.MAP)
+                    } else if (!expanded && screen == WireScreen.MAP) s.drive()
+                    mapTarget = if (expanded) 560f else 165f
+                })
+        }
+        Spacer(Modifier.height(24.dp))
+        Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp)) {
+            val voiceModifier = Modifier.weight(1636f - companionsWeight).fillMaxHeight()
+            if (s.showVoiceRecorder) {
+                DesignedRoadVoiceRecorderCard(voiceModifier) {
+                    s.showVoiceRecorder = false
+                    s.message = "녹음 화면 시연을 마쳤어요. 음성 파일은 저장되지 않았어요."
+                }
+            } else if (mapOpen) {
+                DesignedMapVoice(s, enabled, onVoiceClick, voiceModifier)
+            } else if (musicOpen) {
+                DesignedCompactVoice(s, enabled, voice, onVoiceClick, voiceModifier)
+            } else {
+                DesignedVoiceCard(s, screen, enabled, setupRestricted, voice, onVoiceClick,
+                    onPollSpeech, voiceModifier)
+            }
+            Spacer(Modifier.width(32.dp))
+            Box(Modifier.weight(companionsWeight).fillMaxHeight()) {
+                if (mapOpen) DesignedMapCompanions(s, enabled, Modifier.fillMaxSize())
+                else if (musicOpen) DesignedCompactCompanions(s, enabled, Modifier.fillMaxSize())
+                else DesignedCompanions(s, screen, enabled, Modifier.fillMaxSize())
+                DriveResizeGrip(GripAxis.HORIZONTAL,
+                    "차량 목록을 왼쪽으로 끌어 펼치거나 오른쪽으로 끌어 접기",
+                    canResize, Modifier.align(Alignment.CenterStart).padding(start = 4.dp),
+                    onDrag = { delta ->
+                        companionsDragging = true
+                        companionsTarget = (companionsTarget - delta / density).coerceIn(614f, 900f)
+                    }, onRelease = { total ->
+                        companionsDragging = false
+                        s.companionsExpanded = if (s.companionsExpanded) total <= 56f * density
+                            else total < -56f * density
+                        companionsTarget = if (s.companionsExpanded) 900f else 614f
+                    })
             }
         }
-        Spacer(Modifier.height(16.dp))
-        if (screen == WireScreen.DJ) DesignedMusicExpanded(s, enabled)
-        else DesignedMusicBar(s, enabled)
+        Spacer(Modifier.height(24.dp))
+        Box(Modifier.fillMaxWidth().height(musicHeight.dp)) {
+            if (musicOpen) DesignedMusicExpanded(s, enabled, musicHeight.dp)
+            else DesignedMusicBar(s, enabled, motionAllowed = !setupRestricted,
+                height = musicHeight.dp)
+            DriveResizeGrip(GripAxis.VERTICAL, "음악을 위로 끌어 펼치거나 아래로 끌어 접기",
+                canResize && screen != WireScreen.MAP,
+                Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
+                onDrag = { delta ->
+                    musicDragging = true
+                    musicTarget = (musicTarget - delta / density).coerceIn(200f, 500f)
+                }, onRelease = { total ->
+                    musicDragging = false
+                    val expanded = if (screen == WireScreen.DJ) total <= 56f * density
+                        else total < -56f * density
+                    if (expanded && screen != WireScreen.DJ) {
+                        s.drive()
+                        s.open(WireScreen.DJ)
+                    } else if (!expanded && screen == WireScreen.DJ) s.drive()
+                    musicTarget = if (expanded) 500f else 200f
+                })
+        }
     }
 }
 
@@ -192,19 +300,21 @@ private fun DesignedMapCompanions(s: WireSession, enabled: Boolean, modifier: Mo
             Text("연결된 차량 (2)", Modifier.padding(top = 18.dp, bottom = 2.dp),
                 style = TextStyle(fontFamily = FFont, fontSize = 23.sp,
                     color = DriveDesign.Muted))
-            MapCompanionRow("다연 차", 97, ((1f - s.progress) * 47).toInt(),
+            MapCompanionRow("다연 차", 97,
+                remainingRouteKilometers(LocalConvoy.current.dayeonRouteMeters),
                 R.drawable.flow_imgprofilephoto2, true, enabled,
                 Modifier.weight(1f)) { s.sendKnock("다연 차") }
             Box(Modifier.fillMaxWidth().height(1.dp).background(DriveDesign.Track.copy(alpha = .2f)))
-            MapCompanionRow("문준 차", 64, ((1f - s.progress) * 47).toInt() - 2,
-                R.drawable.flow_imgprofilephoto1, false, enabled,
-                Modifier.weight(1f), onKnock = {})
+            MapCompanionRow("문준 차", 64,
+                remainingRouteKilometers(LocalConvoy.current.munjunRouteMeters),
+                R.drawable.flow_imgprofilephoto1, true, enabled,
+                Modifier.weight(1f)) { s.sendKnock("문준 차") }
         }
     }
 }
 
 @Composable
-private fun MapCompanionRow(name: String, score: Int, distance: Int, portrait: Int,
+private fun MapCompanionRow(name: String, score: Int, distance: String, portrait: Int,
     canKnock: Boolean, enabled: Boolean, modifier: Modifier, onKnock: () -> Unit) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(60.dp)) {
@@ -226,7 +336,7 @@ private fun MapCompanionRow(name: String, score: Int, distance: Int, portrait: I
         Spacer(Modifier.width(8.dp))
         Box(Modifier.width(1.dp).height(39.dp).background(DriveDesign.Track.copy(alpha = .45f)))
         Spacer(Modifier.width(8.dp))
-        Text("${distance.coerceAtLeast(0)}", style = TextStyle(fontFamily = FFont,
+        Text(distance, style = TextStyle(fontFamily = FFont,
             fontSize = 36.sp, color = DriveDesign.Ink))
         Text("km", style = TextStyle(fontFamily = FFont, fontSize = 16.sp,
             color = DriveDesign.Subtle))
@@ -245,23 +355,91 @@ private fun MapCompanionRow(name: String, score: Int, distance: Int, portrait: I
 }
 
 @Composable
-private fun DesignedCompactVoice(s: WireSession, enabled: Boolean, onVoiceClick: () -> Unit,
-    modifier: Modifier) {
+private fun DesignedCompactVoice(s: WireSession, enabled: Boolean,
+    voice: LinkCarVoiceRuntime, onVoiceClick: () -> Unit, modifier: Modifier) {
     Surface(modifier, color = DriveDesign.Card, shape = RoundedCornerShape(48.dp)) {
-        Column(Modifier.fillMaxSize().padding(24.dp)) {
-            Text("음성 연결", style = MaterialTheme.typography.labelMedium, color = DriveDesign.Muted)
-            Spacer(Modifier.weight(1f))
-            Text("우리 휴게소 들렀다 가자!", style = MaterialTheme.typography.headlineLarge,
-                color = DriveDesign.Ink)
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                WireButton("좋아!", { s.vote = "accepted"; s.waypoint = true }, enabled = enabled,
-                    height = Pleos215.ButtonSmall)
-                WireButton("다음에", { s.vote = "rejected" }, filled = false, enabled = enabled,
-                    height = Pleos215.ButtonSmall)
-                WireButton("모두에게 말하기", onVoiceClick, filled = false, enabled = enabled,
-                    height = Pleos215.ButtonSmall)
+        Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("음성 연결", style = MaterialTheme.typography.labelMedium,
+                    color = DriveDesign.Muted)
+                Spacer(Modifier.weight(1f))
+                Surface(Modifier.clickable(enabled) { s.showHistory = true },
+                    color = DriveDesign.Input, shape = CircleShape) {
+                    Text("이전 대화", Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DriveDesign.Subtle)
+                }
             }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Column(Modifier.align(Alignment.CenterStart)) {
+                    val poll = s.generatedPoll
+                    when {
+                        s.demoVoiceTriggered && !s.roadVoiceShown -> {
+                            Text("다연 차가 길에 남긴 음성",
+                                style = MaterialTheme.typography.headlineLarge,
+                                color = DriveDesign.Ink)
+                            Text(voice.status, style = MaterialTheme.typography.labelSmall,
+                                color = DriveDesign.Subtle, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
+                        }
+                        poll != null -> {
+                            Text(poll.title, style = MaterialTheme.typography.headlineLarge,
+                                color = DriveDesign.Ink, maxLines = 2,
+                                overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(12.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                poll.options.forEach { option ->
+                                    WireButton(option, { s.vote = option },
+                                        filled = s.vote == option, enabled = enabled,
+                                        modifier = Modifier.weight(1f), height = Pleos215.ButtonSmall)
+                                }
+                            }
+                            if (s.vote.isNotEmpty()) Text("선택: ${s.vote} · 로컬 시연 투표",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = DriveDesign.Subtle)
+                        }
+                        else -> {
+                            Surface(color = Color.White, shape = CircleShape) {
+                                Row(Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Image(painterResource(R.drawable.drive_avatar), null,
+                                        Modifier.size(32.dp).clip(CircleShape),
+                                        contentScale = ContentScale.Crop)
+                                    Text("다연 차 방금 · 읽어 주는 중",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = DriveDesign.Subtle)
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text(buildAnnotatedString {
+                                append("이 ")
+                                withStyle(SpanStyle(color = DriveDesign.Blue)) { append("노래") }
+                                append(" 누가 신청했어? 좋다")
+                            }, style = MaterialTheme.typography.headlineLarge,
+                                color = DriveDesign.Ink, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
+                            Text("제안이 오면 좋아 · 다음에 버튼이 함께 나타나요",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = DriveDesign.Muted, maxLines = 1)
+                        }
+                    }
+                    if (s.pollBusy) Text("AI가 투표 안건을 만들고 있어요",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DriveDesign.Subtle)
+                    if (s.message.isNotBlank()) Text(s.message,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DriveDesign.Subtle, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                    if (s.speechFeedbackVisible) Text(voice.status,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DriveDesign.Subtle, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                }
+            }
+            WireButton("모두에게 말하기", onVoiceClick, filled = false,
+                enabled = enabled, modifier = Modifier.fillMaxWidth(),
+                height = Pleos215.ButtonSmall)
         }
     }
 }
@@ -273,7 +451,7 @@ private fun DesignedCompactCompanions(s: WireSession, enabled: Boolean, modifier
             Text("연결된 차량 (2)", Modifier.padding(top = 14.dp),
                 style = MaterialTheme.typography.labelMedium, color = DriveDesign.Muted)
             listOf(Triple("다연 차", "97점 · 주행중", R.drawable.flow_imgprofilephoto2),
-                Triple("문준 차", "64점 · 정차중", R.drawable.flow_imgprofilephoto1)).forEachIndexed { i, (name, detail, portrait) ->
+                Triple("문준 차", "64점 · 주행중", R.drawable.flow_imgprofilephoto1)).forEachIndexed { _, (name, detail, portrait) ->
                 Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Image(painterResource(portrait), name, Modifier.size(64.dp).clip(CircleShape),
                         contentScale = ContentScale.Crop)
@@ -282,9 +460,8 @@ private fun DesignedCompactCompanions(s: WireSession, enabled: Boolean, modifier
                         Text(name, style = MaterialTheme.typography.titleMedium, color = DriveDesign.Ink)
                         Text(detail, style = MaterialTheme.typography.labelSmall, color = DriveDesign.Subtle)
                     }
-                    if (i == 0) WireButton("두드리기", {
-                        s.sendKnock("다연 차")
-                    }, enabled = enabled, height = Pleos215.ButtonSmall)
+                    WireButton("두드리기", { s.sendKnock(name) },
+                        enabled = enabled, height = Pleos215.ButtonSmall)
                 }
             }
         }
@@ -309,17 +486,22 @@ private fun DesignedDriveHeader(s: WireSession, enabled: Boolean) {
 }
 
 @Composable
-private fun DesignedRouteStrip(s: WireSession, enabled: Boolean) {
-    BoxWithConstraints(Modifier.fillMaxWidth().height(165.dp).padding(horizontal = 12.dp)
-        .clip(RoundedCornerShape(48.dp)).background(Color.White)
-        .clickable(enabled) { s.open(WireScreen.MAP) }) {
+private fun DesignedRouteStrip(s: WireSession, voiceMarkerVisible: Boolean, height: Dp,
+    enabled: Boolean, onResetDemo: () -> Unit) {
+    val motion = LocalConvoy.current
+    BoxWithConstraints(Modifier.fillMaxWidth().height(height).padding(horizontal = 12.dp)
+        .clip(RoundedCornerShape(48.dp)).background(Color.White)) {
         Image(painterResource(R.drawable.drive_map_strip), null,
             Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
             alignment = BiasAlignment(0f, .54f))
+        MapResetButton(enabled, onResetDemo,
+            Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 10.dp))
         val progress = s.progress.coerceIn(0f, 1f)
         val own = (.10f + progress * .49f).coerceIn(.10f, .59f)
-        val second = (own + .21f).coerceAtMost(.80f)
-        val third = (own + .42f).coerceAtMost(.95f)
+        val second = (.72f + ((motion.dayeonRouteMeters / demoRouteLengthMeters) - .84).toFloat() * .5f)
+            .coerceIn(.72f, .82f)
+        val third = (.90f + ((motion.munjunRouteMeters / demoRouteLengthMeters) - .91).toFloat() * .5f)
+            .coerceIn(.90f, .95f)
         val trackStart = 52.dp
         val trackWidth = maxWidth - trackStart * 2
         Box(Modifier.fillMaxWidth().padding(horizontal = 52.dp).height(14.dp)
@@ -332,10 +514,11 @@ private fun DesignedRouteStrip(s: WireSession, enabled: Boolean) {
         listOf(own, second, third).forEachIndexed { index, place ->
             val portrait = when (index) {
                 0 -> R.drawable.flow_imgprofilephoto
-                1 -> R.drawable.flow_imgprofilephoto1
-                else -> R.drawable.flow_imgprofilephoto2
+                1 -> R.drawable.flow_imgprofilephoto2
+                else -> R.drawable.flow_imgprofilephoto1
             }
-            Box(Modifier.offset(x = trackStart + trackWidth * place - 48.dp, y = 18.dp)
+            Box(Modifier.offset(x = trackStart + trackWidth * place - 48.dp,
+                y = 18.dp + (height - 165.dp).coerceAtLeast(0.dp))
                 .size(96.dp, 120.dp)) {
                 if (index == 0) {
                     val pin = painterResource(R.drawable.drive_pin_self)
@@ -355,12 +538,155 @@ private fun DesignedRouteStrip(s: WireSession, enabled: Boolean) {
                     contentScale = ContentScale.Crop)
             }
         }
+        if (voiceMarkerVisible) {
+            val markerPlace = .10f + .2f * .49f
+            Box(
+                Modifier.offset(x = trackStart + trackWidth * markerPlace - 22.dp,
+                    y = 83.dp + (height - 165.dp).coerceAtLeast(0.dp))
+                    .size(45.dp, 56.dp).semantics {
+                        contentDescription = "출발 지점 200m 앞에 남긴 음성"
+                    }) {
+                Image(painterResource(R.drawable.drive_voice_map_pin), null, Modifier.fillMaxSize())
+                Image(painterResource(R.drawable.drive_voice_map_mic), null,
+                    Modifier.offset(x = 11.dp, y = 11.dp).size(24.dp))
+            }
+        }
+        Surface(Modifier.align(Alignment.TopEnd).padding(end = 20.dp, top = 10.dp),
+            color = Color.White.copy(alpha = .94f), shape = RoundedCornerShape(20.dp)) {
+            Text(motion.motionError ?: if (voiceMarkerVisible) {
+                "내 차 ${motion.speedKph.toInt()} km/h · 음성 지점까지 ${(200.0 - motion.distanceMeters).coerceAtLeast(0.0).toInt()}m"
+            } else {
+                "내 차 ${motion.speedKph.toInt()} km/h · ${motion.distanceMeters.toInt()}m 이동"
+            }, Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (motion.motionError == null) DriveDesign.Ink else DriveDesign.Red)
+        }
     }
 }
 
 @Composable
-private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boolean, voice: LinkCarVoiceRuntime,
-    onVoiceClick: () -> Unit, modifier: Modifier) {
+private fun MapResetButton(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(modifier.size(150.dp, 56.dp).clickable(enabled, onClick = onClick)
+        .semantics { contentDescription = "주행 시연 처음으로" },
+        color = Color.White.copy(alpha = .96f),
+        shape = RoundedCornerShape(16.dp), shadowElevation = 2.dp) {
+        Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(28.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
+                // The provided bitmap has generous transparent padding around its glyph.
+                Image(painterResource(R.drawable.drive_refresh), null, Modifier.requiredSize(88.dp))
+            }
+            Text("처음으로", style = MaterialTheme.typography.labelSmall,
+                color = DriveDesign.Ink, maxLines = 1)
+        }
+    }
+}
+
+/** Visual-only recorder state for the last car; the existing audio runtime is kept intact. */
+@Composable
+internal fun DesignedRoadVoiceRecorderCard(modifier: Modifier = Modifier, onDone: () -> Unit) {
+    val started = remember { SystemClock.elapsedRealtime() }
+    var elapsedSeconds by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            elapsedSeconds = ((SystemClock.elapsedRealtime() - started) / 1_000L).toInt()
+            delay(250)
+        }
+    }
+    val time = "%02d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60)
+    Surface(modifier, color = DriveDesign.Card, shape = RoundedCornerShape(56.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val compact = maxHeight < 440.dp
+            Column(Modifier.fillMaxSize().padding(horizontal = 32.dp,
+                vertical = if (compact) 16.dp else 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("길에 음성 남기기", Modifier.align(Alignment.Start),
+                    style = MaterialTheme.typography.headlineSmall, color = DriveDesign.Ink)
+                Spacer(Modifier.height(4.dp))
+                Text("마지막 차의 녹음 화면을 미리 보고 있어요",
+                    Modifier.align(Alignment.Start),
+                    style = MaterialTheme.typography.labelSmall, color = DriveDesign.Subtle)
+                Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
+                Surface(Modifier.align(Alignment.Start), color = DriveDesign.BluePale,
+                    shape = CircleShape) {
+                    Text("화면 시연 · 음성 저장 안 함",
+                        Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelSmall, color = DriveDesign.Blue)
+                }
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.fillMaxWidth().height(if (compact) 110.dp else 190.dp),
+                    contentAlignment = Alignment.Center) {
+                    DemoRecordingWaves(Modifier.fillMaxSize())
+                    Box(Modifier.size(if (compact) 88.dp else 122.dp)
+                        .border(3.dp, DriveDesign.Blue, CircleShape)
+                        .background(Color.White.copy(alpha = .97f), CircleShape),
+                        contentAlignment = Alignment.Center) {
+                        Image(painterResource(R.drawable.drive_voice_map_mic), null,
+                            Modifier.size(if (compact) 48.dp else 64.dp),
+                            colorFilter = ColorFilter.tint(DriveDesign.Blue))
+                    }
+                }
+                Spacer(Modifier.height(if (compact) 2.dp else 12.dp))
+                Text(time, style = MaterialTheme.typography.displayLarge,
+                    color = DriveDesign.Ink)
+                Text("파형이 일렁이는 녹음 시연 중",
+                    style = MaterialTheme.typography.labelSmall, color = DriveDesign.Subtle)
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.fillMaxWidth().height(if (compact) Pleos215.ButtonSmall
+                    else Pleos215.ButtonMedium)
+                    .clip(RoundedCornerShape(Pleos215.RadiusMedium))
+                    .background(DriveDesign.Black).clickable(onClick = onDone),
+                    contentAlignment = Alignment.Center) {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.size(16.dp).clip(RoundedCornerShape(3.dp))
+                            .background(Color.White))
+                        Text("완료", style = MaterialTheme.typography.titleLarge,
+                            color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DemoRecordingWaves(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "녹음 시연 파형")
+    val phase by transition.animateFloat(0f, (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(tween(1_700, easing = LinearEasing)),
+        label = "일렁이는 파형")
+    Canvas(modifier) {
+        val mid = size.height / 2f
+        repeat(3) { layer ->
+            val path = Path()
+            for (point in 0..100) {
+                val fraction = point / 100f
+                val x = size.width * fraction
+                val envelope = (1f - abs(fraction - .5f) * 1.8f).coerceAtLeast(0f)
+                val wave = sin(fraction * PI * (2.4 + layer * .45) + phase + layer * .9)
+                val y = mid + wave.toFloat() * size.height * (.08f + layer * .035f) * envelope
+                if (point == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, DriveDesign.Blue.copy(alpha = .12f - layer * .025f),
+                style = Stroke(width = (12 - layer * 3).dp.toPx(), cap = StrokeCap.Round))
+        }
+        val gap = size.width / 38f
+        for (index in 3..35) {
+            val x = gap * index
+            if (abs(x - size.width / 2f) < 88.dp.toPx()) continue
+            val height = (7f + 26f * abs(sin(index * .71 + phase))).dp.toPx()
+            drawLine(DriveDesign.BlueMid.copy(alpha = .55f),
+                Offset(x, mid - height / 2f), Offset(x, mid + height / 2f),
+                strokeWidth = 5.dp.toPx(), cap = StrokeCap.Round)
+        }
+    }
+}
+
+@Composable
+private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boolean,
+    setupRestricted: Boolean, voice: LinkCarVoiceRuntime,
+    onVoiceClick: () -> Unit, onPollSpeech: () -> Unit, modifier: Modifier) {
     if (screen == WireScreen.CALL) {
         DesignedActiveCallCard(s, enabled, modifier)
         return
@@ -375,7 +701,7 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                 Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 30.dp),
                 style = MaterialTheme.typography.labelMedium, color = DriveDesign.Muted)
             Surface(Modifier.align(Alignment.TopEnd).padding(end = 38.dp, top = 30.dp)
-                .clickable(enabled) { s.showHistory = true },
+                .clickable(enabled && !setupRestricted) { s.showHistory = true },
                 color = DriveDesign.Input, shape = CircleShape) {
                 Text("이전 대화", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.labelSmall, color = DriveDesign.Subtle)
@@ -388,6 +714,8 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                     Image(painterResource(when {
                         screen in setOf(WireScreen.INCOMING_CALL, WireScreen.CALL_DECLINED) &&
                             s.incomingCaller == "문준 차" -> R.drawable.flow_imgprofilephoto1
+                        screen == WireScreen.KNOCK_SENT && s.knockTarget == "문준 차" ->
+                            R.drawable.flow_imgprofilephoto1
                         screen in setOf(WireScreen.INCOMING_CALL, WireScreen.CALL_DECLINED,
                             WireScreen.KNOCK_SENT, WireScreen.KNOCK_RECEIVED,
                             WireScreen.KNOCK_FULL) -> R.drawable.flow_imgprofilephoto2
@@ -395,7 +723,8 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                     }), null,
                         Modifier.size(48.dp).clip(CircleShape))
                     Text("${if (screen in setOf(WireScreen.INCOMING_CALL, WireScreen.CALL,
-                        WireScreen.CALL_DECLINED)) s.incomingCaller else "다연 차"} 방금",
+                        WireScreen.CALL_DECLINED)) s.incomingCaller else if (screen == WireScreen.KNOCK_SENT)
+                        s.knockTarget else "다연 차"} 방금",
                         style = MaterialTheme.typography.labelSmall,
                         color = DriveDesign.Subtle)
                     listOf(10, 20, 32, 20, 14, 26, 16, 10).forEach { height ->
@@ -404,6 +733,7 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                     }
                     Text(when (screen) {
                         WireScreen.INCOMING_CALL -> "전화 수신 중"
+                        WireScreen.KNOCK_SENT -> if (s.seconds > 0) "응답 기다리는 중" else "응답 없음"
                         WireScreen.CALL -> "대화 화면 · 시연"
                         WireScreen.CALL_DECLINED -> "전화 거절됨"
                         else -> "읽어 주는 중"
@@ -438,9 +768,9 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                         style = MaterialTheme.typography.labelSmall, color = DriveDesign.Subtle,
                         textAlign = TextAlign.Center)
                 } else if (screen == WireScreen.KNOCK_SENT) {
-                    Text("다연 차에 두드렸어요", style = MaterialTheme.typography.displayLarge,
+                    Text("${s.knockTarget}에 두드렸어요", style = MaterialTheme.typography.displayLarge,
                         color = DriveDesign.Ink, textAlign = TextAlign.Center)
-                    Text("응답을 기다리는 중이에요 · ${s.seconds}초",
+                    Text(if (s.seconds > 0) "응답을 기다리는 중이에요 · ${s.seconds}초" else "응답이 없어요",
                         style = MaterialTheme.typography.labelSmall, color = DriveDesign.Subtle,
                         textAlign = TextAlign.Center)
                 } else if (screen == WireScreen.CALL) {
@@ -459,6 +789,12 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                         textAlign = TextAlign.Center)
                     Text("위치와 음성은 현재 로컬 시연 데이터예요",
                         style = MaterialTheme.typography.labelMedium, color = DriveDesign.Subtle)
+                } else if (s.demoVoiceTriggered && !s.roadVoiceShown && screen == WireScreen.DRIVE) {
+                    Text("다연 차가 길에 남긴 음성", style = MaterialTheme.typography.displayLarge,
+                        color = DriveDesign.Ink, textAlign = TextAlign.Center)
+                    Text(voice.status,
+                        style = MaterialTheme.typography.labelMedium, color = DriveDesign.Subtle,
+                        textAlign = TextAlign.Center)
                 } else if (poll == null) {
                     Text(buildAnnotatedString {
                         append("이 ")
@@ -488,12 +824,14 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                 if (s.message.isNotBlank()) Text(s.message, style = MaterialTheme.typography.labelSmall,
                     color = DriveDesign.Subtle, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center)
-                if (voice.status.contains("오류") || voice.status.contains("실패")) {
+                if (s.speechFeedbackVisible) {
                     Text(voice.status, style = MaterialTheme.typography.labelSmall,
                         color = DriveDesign.Subtle, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center)
-                    WireButton("텍스트로 AI 투표 시험", { s.showPollTextEntry = true }, filled = false,
-                        enabled = enabled, height = Pleos215.ButtonSmall)
+                    if (voice.status.contains("오류") || voice.status.contains("실패")) {
+                        WireButton("텍스트로 AI 투표 시험", { s.showPollTextEntry = true }, filled = false,
+                            enabled = enabled && !setupRestricted, height = Pleos215.ButtonSmall)
+                    }
                 }
             }
             if (screen == WireScreen.INCOMING_CALL) {
@@ -528,13 +866,13 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                         enabled = enabled, modifier = Modifier.weight(1.6f), height = Pleos215.ButtonLarge)
                 }
             } else if (screen == WireScreen.KNOCK_SENT) {
-                Surface(Modifier.align(Alignment.BottomCenter).padding(16.dp)
-                    .fillMaxWidth().height(120.dp), color = DriveDesign.Input,
-                    shape = RoundedCornerShape(48.dp)) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("다연 차의 응답을 기다리는 중", style = MaterialTheme.typography.titleLarge,
-                            color = DriveDesign.Subtle)
-                    }
+                Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    WireButton(if (s.seconds > 0) "취소" else "닫기", { s.drive() },
+                        filled = false, enabled = enabled, modifier = Modifier.weight(1f))
+                    WireButton(if (s.seconds > 0) "응답 시연" else "음성 메시지 남기기",
+                        { if (s.seconds > 0) s.startKnockCall() else s.open(WireScreen.VOICE_LEAVE) },
+                        enabled = enabled, modifier = Modifier.weight(1.4f))
                 }
             } else {
                 Surface(Modifier.align(Alignment.BottomCenter).padding(16.dp)
@@ -551,7 +889,48 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                     }
                 }
             }
+            if (s.showVoiceMenu) {
+                Column(Modifier.align(Alignment.TopCenter).padding(top = 67.dp)
+                    .width(848.dp).height(442.dp)
+                    .clip(RoundedCornerShape(56.dp)).background(Color.White.copy(alpha = .96f)),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("모두에게 말하기", Modifier.padding(top = 38.dp),
+                        style = TextStyle(fontFamily = FFont, fontSize = 48.sp,
+                            fontWeight = FontWeight.Bold, color = DriveDesign.Ink))
+                    Text("어떤 방식으로 말할까요?", Modifier.padding(top = 18.dp),
+                        style = TextStyle(fontFamily = FFont, fontSize = 26.sp,
+                            color = Color(0xFF9398A5)))
+                    Spacer(Modifier.height(52.dp))
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        VoiceChoiceTile("투표 안건 말하기", R.drawable.drive_vote_option,
+                            Color(0xFF44464E), enabled, Modifier.weight(1f)) {
+                            s.showVoiceMenu = false
+                            onPollSpeech()
+                        }
+                        VoiceChoiceTile("길에 음성 남기기", R.drawable.drive_road_voice_option,
+                            Color(0xFF7583EE), enabled, Modifier.weight(1f)) {
+                            s.showVoiceMenu = false
+                            s.showVoiceRecorder = true
+                        }
+                    }
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun VoiceChoiceTile(label: String, icon: Int, color: Color, enabled: Boolean,
+    modifier: Modifier, onClick: () -> Unit) {
+    Column(modifier.height(230.dp).clip(RoundedCornerShape(48.dp))
+        .background(color).clickable(enabled, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center) {
+        Image(painterResource(icon), null, Modifier.size(70.dp))
+        Spacer(Modifier.height(24.dp))
+        Text(label, style = TextStyle(fontFamily = FFont, fontSize = 36.sp,
+            fontWeight = FontWeight.Bold, color = Color.White), maxLines = 1)
     }
 }
 
@@ -578,7 +957,9 @@ private fun DesignedActiveCallCard(s: WireSession, enabled: Boolean, modifier: M
             Row(Modifier.offset(430.dp, 170.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Image(painterResource(R.drawable.flow_imgprofilephoto2), "다연 차",
+                Image(painterResource(if (s.incomingCaller == "문준 차")
+                    R.drawable.flow_imgprofilephoto1 else R.drawable.flow_imgprofilephoto2),
+                    s.incomingCaller,
                     Modifier.size(56.dp).clip(CircleShape), contentScale = ContentScale.Crop)
                 Surface(color = DriveDesign.Input, shape = CircleShape) {
                     Text("주행 중", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -586,7 +967,7 @@ private fun DesignedActiveCallCard(s: WireSession, enabled: Boolean, modifier: M
                 }
             }
             Text(buildAnnotatedString {
-                withStyle(SpanStyle(color = DriveDesign.Blue)) { append("다연 차") }
+                withStyle(SpanStyle(color = DriveDesign.Blue)) { append(s.incomingCaller) }
                 append("와 대화 중")
             }, Modifier.offset(430.dp, 250.dp),
                 style = MaterialTheme.typography.displayLarge, color = DriveDesign.Ink,
@@ -628,22 +1009,26 @@ private fun DesignedCompanions(s: WireSession, screen: WireScreen, enabled: Bool
                         Modifier.size(56.dp), contentScale = ContentScale.Crop)
                 }
             }
-            DesignedCompanionRow("다연 차", "주행중", 97, ((1f - s.progress) * 47).toInt(),
+            DesignedCompanionRow("다연 차", "시연 주행 · 60 km/h", 97,
+                remainingRouteKilometers(LocalConvoy.current.dayeonRouteMeters),
                 R.drawable.flow_imgprofilephoto2, R.drawable.drive_status_green,
-                enabled, true, screen == WireScreen.CALL, s.seconds, Modifier.weight(1f)) {
+                enabled, true, screen == WireScreen.CALL && s.incomingCaller == "다연 차",
+                s.seconds, Modifier.weight(1f)) {
                 s.sendKnock("다연 차")
             }
             Image(painterResource(R.drawable.drive_card_divider), null,
                 Modifier.fillMaxWidth().height(2.dp), contentScale = ContentScale.FillBounds)
-            DesignedCompanionRow("문준 차", "정차중", 64, ((1f - s.progress) * 47).toInt() - 2,
-                R.drawable.flow_imgprofilephoto1, R.drawable.drive_status_red,
-                enabled, false, false, s.seconds, Modifier.weight(1f), onKnock = {})
+            DesignedCompanionRow("문준 차", "시연 주행 · 40 km/h", 64,
+                remainingRouteKilometers(LocalConvoy.current.munjunRouteMeters),
+                R.drawable.flow_imgprofilephoto1, R.drawable.drive_status_green,
+                enabled, true, screen == WireScreen.CALL && s.incomingCaller == "문준 차",
+                s.seconds, Modifier.weight(1f)) { s.sendKnock("문준 차") }
         }
     }
 }
 
 @Composable
-private fun DesignedCompanionRow(name: String, state: String, score: Int, distance: Int,
+private fun DesignedCompanionRow(name: String, state: String, score: Int, distance: String,
     portrait: Int, statusDot: Int, enabled: Boolean, canKnock: Boolean,
     inCall: Boolean, callSeconds: Int, modifier: Modifier, onKnock: () -> Unit) {
     Row(modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
@@ -677,7 +1062,7 @@ private fun DesignedCompanionRow(name: String, state: String, score: Int, distan
                     Modifier.width(2.dp).height(53.dp), contentScale = ContentScale.FillBounds)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text("${distance.coerceAtLeast(0)}", style = MaterialTheme.typography.displayMedium,
+                        Text(distance, style = MaterialTheme.typography.displayMedium,
                             color = DriveDesign.Ink)
                         Text("km", style = MaterialTheme.typography.labelSmall,
                             color = DriveDesign.Subtle)
@@ -710,16 +1095,19 @@ private fun DesignedCompanionRow(name: String, state: String, score: Int, distan
 }
 
 @Composable
-private fun DesignedMusicBar(s: WireSession, enabled: Boolean) {
-    val beatTransition = rememberInfiniteTransition(label = "music glow")
-    val beat by beatTransition.animateFloat(0f, 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 520, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse), label = "beat")
+private fun DesignedMusicBar(s: WireSession, enabled: Boolean, motionAllowed: Boolean, height: Dp) {
+    val beat = if (motionAllowed && s.music && s.playing) {
+        val beatTransition = rememberInfiniteTransition(label = "music glow")
+        val animatedBeat by beatTransition.animateFloat(0f, 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 520, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse), label = "beat")
+        animatedBeat
+    } else 0f
     val blueGlow = if (!s.music) 0f else if (s.playing) .16f + .11f * beat else .12f
     val purpleGlow = if (!s.music) 0f else if (s.playing) .13f + .08f * beat else .10f
-    val rise = if (s.music && s.playing) beat * 5f else 0f
-    Surface(Modifier.fillMaxWidth().height(200.dp), color = DriveDesign.Card) {
+    val rise = if (motionAllowed && s.music && s.playing) beat * 5f else 0f
+    Surface(Modifier.fillMaxWidth().height(height), color = DriveDesign.Card) {
         Box(Modifier.fillMaxSize().clip(RoundedCornerShape(0.dp))) {
             Image(painterResource(R.drawable.drive_music_wave_blue), null,
                 Modifier.offset(x = (-125).dp, y = (80f - rise).dp)
@@ -733,11 +1121,10 @@ private fun DesignedMusicBar(s: WireSession, enabled: Boolean) {
             Row(Modifier.fillMaxSize().padding(start = 44.dp, end = 24.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Image(painterResource(R.drawable.drive_album_art), "앨범 이미지",
-                    Modifier.size(156.dp).clip(RoundedCornerShape(24.dp))
-                        .clickable(enabled) { s.open(WireScreen.DJ) },
+                    Modifier.size(156.dp).clip(RoundedCornerShape(24.dp)),
                     contentScale = ContentScale.Crop)
                 Spacer(Modifier.width(40.dp))
-                Column(Modifier.width(300.dp).clickable(enabled) { s.open(WireScreen.DJ) }) {
+                Column(Modifier.width(300.dp)) {
                     Text(if (s.music) listOf("밤편지", "여행", "좋은 밤")[s.song] else "노래명 입력란",
                         style = MaterialTheme.typography.titleLarge, color = DriveDesign.Ink,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -801,8 +1188,8 @@ private fun DesignedMusicBar(s: WireSession, enabled: Boolean) {
 }
 
 @Composable
-private fun DesignedMusicExpanded(s: WireSession, enabled: Boolean) {
-    Surface(Modifier.fillMaxWidth().height(500.dp), color = DriveDesign.Card) {
+private fun DesignedMusicExpanded(s: WireSession, enabled: Boolean, height: Dp) {
+    Surface(Modifier.fillMaxWidth().height(height), color = DriveDesign.Card) {
         Row(Modifier.fillMaxSize().padding(30.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             Image(painterResource(R.drawable.drive_album_art), "앨범 이미지",
@@ -830,8 +1217,6 @@ private fun DesignedMusicExpanded(s: WireSession, enabled: Boolean) {
                     MusicIcon(R.drawable.drive_media_next, "다음 곡", enabled && s.music) {
                         s.song = (s.song + 1) % 3
                     }
-                    WireButton("주행 화면", { s.drive() }, filled = false, enabled = enabled,
-                        height = Pleos215.ButtonSmall)
                 }
             }
             Surface(Modifier.width(300.dp).fillMaxHeight(), color = Color.White,

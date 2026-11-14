@@ -10,6 +10,7 @@ import ai.pleos.playground.stt.listener.OnInitializeListener
 import ai.pleos.playground.stt.listener.ResultListener
 import android.Manifest
 import android.content.Context
+import android.net.Uri
 import android.content.pm.PackageManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -129,7 +130,7 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
                     runCatching {
                         service.addListener(listener)
                         sttListener = listener
-                        service.setLocale(Locale.KOREAN)
+                        service.setLocale(Locale.KOREA)
                         service.request()
                     }
                         .onFailure { status = "Pleos 음성 인식 시작 실패: ${it.message}"; isListening = false }
@@ -164,7 +165,7 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
         isRecording = false
         return audio.stopAndSave().mapCatching { file ->
             val note = notes.add(file, progress, currentPoint ?: fallbackPoint)
-            status = "음성을 저장했어요. 로컬 시연의 뒤차가 이 지점을 지나면 원본이 재생됩니다."
+            status = "음성을 저장했어요. 설정에서 자동 재생을 켜거나 이전 대화에서 직접 들어 보세요."
             note
         }.onFailure { status = "녹음 저장 실패: ${it.message}" }.getOrNull()
     }
@@ -173,6 +174,38 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
         audio.cancelRecording()
         isRecording = false
         status = "녹음을 취소했어요."
+    }
+
+    fun importDemoMarker(uri: Uri): Boolean = notes.importDemoMarker(uri)
+            .onSuccess { status = "음성 파일을 출발 지점 200m 앞에 놓았어요." }
+            .onFailure { status = "음성 파일 추가 실패: ${it.message ?: "파일을 확인해 주세요."}" }
+            .isSuccess
+
+    fun placeRecordedMarker(note: RoadVoiceNote): Boolean = runCatching {
+        notes.useAsDemoMarker(note)
+    }.onSuccess { status = "녹음한 음성을 출발 지점 200m 앞에 놓았어요." }
+        .onFailure { status = "녹음한 음성을 지도에 놓지 못했어요: ${it.message}" }
+        .isSuccess
+
+    fun resetBundledDemoMarker(): Boolean {
+        val ready = notes.resetBundledDemoMarker()
+        status = if (ready) "시연 음성을 출발 지점 200m 앞에 다시 놓았어요."
+            else "앱에 포함된 시연 음성 파일이 없어요."
+        return ready
+    }
+
+    fun playDemoMarker(onFinished: () -> Unit): Boolean {
+        val file = notes.demoMarkerFile() ?: run {
+            status = "200m 지점에 놓인 음성 파일이 없어요."
+            return false
+        }
+        return audio.play(file) {
+            notes.consumeDemoMarker()
+            status = "길에 남긴 음성을 다 들었어요. 지도에서 표시를 지웠어요."
+            onFinished()
+        }.onSuccess {
+            status = "다연 차가 길에 남긴 음성을 재생하고 있어요."
+        }.onFailure { status = "길에 남긴 음성 재생 실패: ${it.message}" }.isSuccess
     }
 
     fun play(note: RoadVoiceNote, car: String? = null) {
@@ -194,7 +227,7 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
 
     private fun sttErrorMessage(error: ErrorType): String = when (error) {
         ErrorType.ON_DEVICE_ENGINE_ERROR ->
-            "Pleos STT 엔진 오류: 에뮬레이터의 마이크 입력과 Cold boot 설정을 확인해 주세요."
+            "Pleos STT 엔진을 시작하지 못했어요. 음성 모델과 에뮬레이터 설정을 확인해 주세요."
         ErrorType.PERMISSION_DENIED -> "Pleos STT 서비스 권한이 없습니다. 앱의 STT_SERVICE 접근 상태를 확인해 주세요."
         ErrorType.MIC_ERROR -> "Pleos STT 마이크 오류: 에뮬레이터의 마이크 입력을 확인해 주세요."
         else -> "Pleos 음성 인식 오류: $error"

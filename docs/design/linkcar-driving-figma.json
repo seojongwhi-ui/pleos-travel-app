@@ -2,6 +2,7 @@
   "figmaFile": "c3q0MskWTtRP5gE9WspRVo",
   "figmaNode": "328:5199",
   "sourceSection": "328:4624",
+  "additionalNodes": ["328:8108", "387:12894"],
   "file": "LinkCarDesignedDrive.kt",
   "colors": [
     "#F4F5F7",
@@ -17,6 +18,8 @@
     "#19BB62",
     "#FF7777",
     "#191A1B",
-    "#F3F4F8"
+    "#F3F4F8",
+    "#9398A5",
+    "#7583EE"
   ]
 }

@@ -1,6 +1,8 @@
 package com.contest.travel.preview
 
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
 import android.view.View
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -35,7 +37,8 @@ internal val convoyNames = listOf("내 차", "다연 차", "문준 차")
 
 /** NAVER basemap with local demo overlays; this does not request a Directions route. */
 @Composable
-internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Boolean, modifier: Modifier) {
+internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Boolean,
+    modifier: Modifier, voiceMarkerVisible: Boolean = false) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val convoy = LocalConvoy.current
@@ -50,9 +53,8 @@ internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Bool
     var failed by remember { mutableStateOf(false) }
     var loaded by remember { mutableStateOf(false) }
     var retry by remember { mutableIntStateOf(0) }
-    val progress = animateFloatAsState(convoy.progress.toFloat(), tween(4_000), label = "road-car-progress").value
     val real = live.location.value?.takeIf { convoy.useRealCar && live.location.status == ReadStatus.READY }
-    val cars = convoyMapPositions(progress.toDouble(), convoy.useRealCar, live.location)
+    val cars = convoyMapPositions(convoy, live.location)
 
     if (!hasClientId) {
         Column(modifier.padding(20.dp)) {
@@ -95,8 +97,8 @@ internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Bool
             status = "네이버 지도 응답 시간이 초과됐어요. 네트워크를 확인하고 다시 시도해 주세요."
         }
     }
-    LaunchedEffect(loaded, cars, enabled) {
-        if (loaded) bridge.update(cars, enabled)
+    LaunchedEffect(loaded, cars, enabled, voiceMarkerVisible) {
+        if (loaded) bridge.update(cars, enabled, voiceMarkerVisible)
     }
     // Reframe for explicit camera requests and new trip data, not every position animation frame.
     LaunchedEffect(loaded, overview, cameraRevision, convoy.revision, convoy.useRealCar, real) {
@@ -127,12 +129,14 @@ internal fun RoadConvoyMap(overview: Boolean, cameraRevision: Int, enabled: Bool
 }
 
 private class NaverRoadMapBridge(context: android.content.Context) {
+    private val appContext = context
     val view = MapView(context)
     private val sdk = NaverMapSdk.getInstance(context)
     private var authListener: NaverMapSdk.OnAuthFailedListener? = null
     private var map: NaverMap? = null
     private var path: PathOverlay? = null
     private var destination: Marker? = null
+    private var voiceMarker: Marker? = null
     private val carMarkers = mutableListOf<Marker>()
     private var started = false
     private var resumed = false
@@ -193,9 +197,21 @@ private class NaverRoadMapBridge(context: android.content.Context) {
             captionText = "가평 계곡 · 목적지"
             map = naverMap
         }
+        voiceMarker = Marker().apply {
+            position = routePositionAtMeters(demoRouteLengthMeters * .36 + 200.0).latLng()
+            icon = voiceMarkerImage(appContext)
+            width = 45
+            height = 56
+            captionText = "200m 앞 · 길에 남긴 음성"
+            captionColor = Pleos215.Neutral.toArgb()
+            captionHaloColor = android.graphics.Color.WHITE
+            isVisible = false
+            map = naverMap
+        }
         convoyNames.forEachIndexed { index, name ->
             carMarkers += Marker().apply {
-                position = routePosition(.38 + listOf(0.0, -.12, .14)[index]).latLng()
+                position = routePositionAtMeters(demoRouteLengthMeters *
+                    listOf(.36, .84, .91)[index]).latLng()
                 icon = OverlayImage.fromResource(when (index) {
                     0 -> R.drawable.flow_imgprofilephoto
                     1 -> R.drawable.flow_imgprofilephoto2
@@ -212,8 +228,9 @@ private class NaverRoadMapBridge(context: android.content.Context) {
         }
     }
 
-    fun update(cars: List<GeoPoint?>, enabled: Boolean) {
+    fun update(cars: List<GeoPoint?>, enabled: Boolean, voiceMarkerVisible: Boolean) {
         if (destroyed) return
+        voiceMarker?.isVisible = voiceMarkerVisible
         cars.forEachIndexed { i, point ->
             carMarkers.getOrNull(i)?.apply {
                 isVisible = point != null
@@ -260,6 +277,7 @@ private class NaverRoadMapBridge(context: android.content.Context) {
         destroyed = true
         path?.map = null
         destination?.map = null
+        voiceMarker?.map = null
         carMarkers.forEach { it.map = null }
         if (sdk.onAuthFailedListener === authListener) sdk.onAuthFailedListener = null
         view.onDestroy()
@@ -267,3 +285,14 @@ private class NaverRoadMapBridge(context: android.content.Context) {
 }
 
 private fun GeoPoint.latLng(): LatLng = LatLng(latitude, longitude)
+
+private fun voiceMarkerImage(context: android.content.Context): OverlayImage {
+    val bitmap = Bitmap.createBitmap(45, 56, Bitmap.Config.ARGB_8888)
+    val pin = requireNotNull(context.getDrawable(R.drawable.drive_voice_map_pin))
+    pin.setBounds(0, 0, 45, 56)
+    pin.draw(AndroidCanvas(bitmap))
+    val mic = requireNotNull(context.getDrawable(R.drawable.drive_voice_map_mic))
+    mic.setBounds(11, 11, 35, 35)
+    mic.draw(AndroidCanvas(bitmap))
+    return OverlayImage.fromBitmap(bitmap)
+}

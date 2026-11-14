@@ -22,9 +22,11 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun ColumnScope.WireDriving(s: WireSession, screen: WireScreen, wide: Boolean, enabled: Boolean,
-    voice: LinkCarVoiceRuntime, designWide: Boolean, onVoiceClick: () -> Unit) {
+    voice: LinkCarVoiceRuntime, designWide: Boolean, setupRestricted: Boolean,
+    onVoiceClick: () -> Unit, onResetDemo: () -> Unit, onPollSpeech: () -> Unit) {
     if (screen.isDriving && designWide) {
-        DesignedDriveScreen(s, screen, enabled, voice, onVoiceClick)
+        DesignedDriveScreen(s, screen, enabled, setupRestricted, voice, onVoiceClick,
+            onResetDemo, onPollSpeech)
         return
     }
     if (screen == WireScreen.KNOCK_FULL) {
@@ -37,24 +39,36 @@ internal fun ColumnScope.WireDriving(s: WireSession, screen: WireScreen, wide: B
             Text("목적지까지 함께해요", style = MaterialTheme.typography.titleLarge, color = Wire.ink)
             WireSub("순위는 안전 운전 점수로 정해져요")
         }
-        WireChip("⚑  도착 15:40 · ${((1f - s.progress) * 82).toInt()}km")
+        WireChip("⚑  도착 15:40 · ${(82 - (LocalConvoy.current.distanceMeters / 1_000).toInt()).coerceAtLeast(0)}km")
         Spacer(Modifier.weight(.5f))
         WireButton("설정", { s.showSettings = true }, filled = false,
-            enabled = enabled, width = 120.dp, height = 60.dp)
-        WireButton("동행 종료", { s.showEnd = true }, enabled = enabled,
+            enabled = enabled && !setupRestricted, width = 120.dp, height = 60.dp)
+        WireButton("동행 종료", { s.showEnd = true }, enabled = enabled && !setupRestricted,
             width = 170.dp, height = 60.dp)
     }
     Spacer(Modifier.height(12.dp))
-    WireTrack(s, screen == WireScreen.MAP, enabled)
+    WireTrack(s, screen == WireScreen.MAP, enabled, onResetDemo)
     Spacer(Modifier.height(16.dp))
     if (wide) {
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            WireFeed(s, screen, enabled, Modifier.weight(1.9f).fillMaxHeight(), voice, onVoiceClick)
+            if (s.showVoiceRecorder) {
+                DesignedRoadVoiceRecorderCard(Modifier.weight(1.9f).fillMaxHeight()) {
+                    s.showVoiceRecorder = false
+                    s.message = "녹음 화면 시연을 마쳤어요. 음성 파일은 저장되지 않았어요."
+                }
+            } else WireFeed(s, screen, enabled, setupRestricted,
+                Modifier.weight(1.9f).fillMaxHeight(), voice, onVoiceClick)
             WireCars(s, screen, enabled, Modifier.weight(1f).fillMaxHeight())
         }
     } else {
         Column(Modifier.weight(1f)) {
-            WireFeed(s, screen, enabled, Modifier.weight(1f).fillMaxWidth(), voice, onVoiceClick)
+            if (s.showVoiceRecorder) {
+                DesignedRoadVoiceRecorderCard(Modifier.weight(1f).fillMaxWidth()) {
+                    s.showVoiceRecorder = false
+                    s.message = "녹음 화면 시연을 마쳤어요. 음성 파일은 저장되지 않았어요."
+                }
+            } else WireFeed(s, screen, enabled, setupRestricted,
+                Modifier.weight(1f).fillMaxWidth(), voice, onVoiceClick)
             WireCars(s, screen, enabled, Modifier.height(180.dp).fillMaxWidth())
         }
     }
@@ -63,15 +77,20 @@ internal fun ColumnScope.WireDriving(s: WireSession, screen: WireScreen, wide: B
 }
 
 @Composable
-private fun WireTrack(s: WireSession, expanded: Boolean, enabled: Boolean) {
+private fun WireTrack(s: WireSession, expanded: Boolean, enabled: Boolean,
+    onResetDemo: () -> Unit) {
     Surface(Modifier.fillMaxWidth().height(if (expanded) 550.dp else 188.dp),
         color = Wire.muted, shape = RoundedCornerShape(Pleos215.RadiusLarge)) {
         Column(Modifier.padding(20.dp)) {
-            Row(Modifier.fillMaxWidth().clickable(enabled) {
-                if (expanded) s.drive() else s.open(WireScreen.MAP)
-            }, horizontalArrangement = Arrangement.SpaceBetween) {
-                WireSub(if (expanded) "M1 동행 현황 · 지도 (다시 탭하면 원래 크기)"
-                    else "M1 동행 현황 · 탭하면 지도로 커짐")
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween) {
+                WireButton("처음으로", onResetDemo, filled = false, enabled = enabled,
+                    width = 150.dp, height = Pleos215.ButtonSmall)
+                Box(Modifier.weight(1f).clickable(enabled) {
+                    if (expanded) s.drive() else s.open(WireScreen.MAP)
+                }.padding(horizontal = 12.dp)) {
+                    WireSub(if (expanded) "동행 지도 접기" else "동행 지도 펼치기")
+                }
                 WireChip(if (s.roadVoiceShown) "길에 남긴 음성 1개"
                     else if (s.waypoint) "경유지 · 투표 완료" else "경유지 · 투표 현황")
             }
@@ -94,7 +113,7 @@ private fun WireTrack(s: WireSession, expanded: Boolean, enabled: Boolean) {
                     }
                     val people = listOf("내 차", "B", "C")
                     people.forEachIndexed { index, name ->
-                        val p = (s.progress + when(index) { 0 -> -.07f; 1 -> .09f; else -> .27f }).coerceIn(0f, .92f)
+                        val p = (s.progress + when(index) { 0 -> 0f; 1 -> .25f; else -> .45f }).coerceIn(0f, .92f)
                         val x = (maxWidth - 120.dp) * p
                         Column(Modifier.offset(x = x - maxWidth / 2f + 60.dp).width(120.dp),
                             horizontalAlignment = Alignment.CenterHorizontally) {
@@ -110,7 +129,8 @@ private fun WireTrack(s: WireSession, expanded: Boolean, enabled: Boolean) {
 }
 
 @Composable
-private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modifier: Modifier,
+private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean,
+    setupRestricted: Boolean, modifier: Modifier,
     voice: LinkCarVoiceRuntime, onVoiceClick: () -> Unit) {
     val compact = screen == WireScreen.MAP
     Column(modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
@@ -118,7 +138,9 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
             verticalAlignment = Alignment.CenterVertically) {
             WireSub("M2 소통 · 결정")
             if (!compact && screen in listOf(WireScreen.DRIVE, WireScreen.DJ, WireScreen.VOICE_APPROACH)) {
-                WireChip("이전 대화", onClick = if (enabled) { { s.showHistory = true } } else null)
+                WireChip("이전 대화", onClick = if (enabled && !setupRestricted) {
+                    { s.showHistory = true }
+                } else null)
             }
         }
         Spacer(Modifier.height(if (compact) 12.dp else 26.dp))
@@ -147,7 +169,15 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
                 Spacer(Modifier.height(22.dp))
                 LinearProgressIndicator(progress = { (10 - s.seconds) / 10f },
                     modifier = Modifier.fillMaxWidth(), color = Wire.action, trackColor = Wire.mutedStrong)
-                WireSub("${s.seconds}초")
+                WireSub(if (s.seconds > 0) "${s.seconds}초" else "응답이 없어요")
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    WireButton(if (s.seconds > 0) "취소" else "닫기", { s.drive() },
+                        filled = false, enabled = enabled, modifier = Modifier.weight(1f))
+                    WireButton(if (s.seconds > 0) "응답 시연" else "음성 메시지 남기기",
+                        { if (s.seconds > 0) s.startKnockCall() else s.open(WireScreen.VOICE_LEAVE) },
+                        enabled = enabled, modifier = Modifier.weight(1.4f))
+                }
             }
             WireScreen.KNOCK_RECEIVED -> {
                 WireSub("다연 차  ·  주행 중")
@@ -235,6 +265,13 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
                         }
                     }
                     if (s.vote.isNotEmpty()) WireSub("선택: ${s.vote} · 로컬 시연 투표")
+                } else if (s.demoVoiceTriggered && !s.roadVoiceShown && screen == WireScreen.DRIVE) {
+                    WireTitle("200m 음성 지점에 도착했어요")
+                    Spacer(Modifier.height(16.dp))
+                    WireSub("버튼을 눌러 이곳에 원본 목소리를 남겨보세요 · 한 기기 시연")
+                    Spacer(Modifier.height(20.dp))
+                    WireButton("이곳에 음성 남기기", onVoiceClick, enabled = enabled,
+                        modifier = Modifier.fillMaxWidth())
                 } else {
                     WireTitle(if (s.vote == "accepted") "좋아요, 휴게소에서 만나요"
                         else if (s.vote == "rejected") "다음에 들를게요"
@@ -262,7 +299,8 @@ private fun WireFeed(s: WireSession, screen: WireScreen, enabled: Boolean, modif
         if (voice.status.contains("STT") || voice.status.contains("음성 인식 오류")) {
             Spacer(Modifier.height(8.dp))
             WireButton("텍스트로 AI 투표 시험", { s.showPollTextEntry = true }, filled = false,
-                enabled = enabled, modifier = Modifier.fillMaxWidth(), height = 64.dp)
+                enabled = enabled && !setupRestricted,
+                modifier = Modifier.fillMaxWidth(), height = 64.dp)
         }
         Spacer(Modifier.weight(1f))
         if (!compact && screen != WireScreen.CALL) {

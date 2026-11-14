@@ -1,6 +1,7 @@
 package com.contest.travel.preview
 
 import android.content.Context
+import android.net.Uri
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -8,9 +9,12 @@ import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.os.Build
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
 
 internal data class RoadVoiceNote(
@@ -29,10 +33,94 @@ internal class RoadVoiceNoteStore(context: Context) {
     private val prefs = app.getSharedPreferences("linkcar_road_voice", Context.MODE_PRIVATE)
     private val directory = File(app.filesDir, "road_voice").apply { mkdirs() }
     val notes = mutableStateListOf<RoadVoiceNote>()
+    private val markerFile = File(directory, "demo_road_voice.audio")
+    var hasDemoMarker by androidx.compose.runtime.mutableStateOf(
+        markerFile.isFile && !prefs.getBoolean("marker_consumed", false)
+    )
+        private set
 
-    init { load() }
+    init {
+        load()
+        importBundledDemoMarker()
+    }
+
+    private fun importBundledDemoMarker() {
+        if (hasDemoMarker || prefs.getBoolean("marker_consumed", false)) return
+        val name = app.assets.list("")?.firstOrNull {
+            it in setOf("road_voice_demo.m4a", "road_voice_demo.mp3", "road_voice_demo.wav", "road_voice_demo.ogg")
+        } ?: return
+        runCatching {
+            app.assets.open(name).use { source ->
+                markerFile.outputStream().use { target -> source.copyTo(target) }
+            }
+            if (markerFile.length() > 0L) hasDemoMarker = true else markerFile.delete()
+        }
+    }
 
     fun newFile(): File = File(directory, "${UUID.randomUUID()}.m4a")
+
+    /** A local audio file is placed 200 m ahead of the trip's starting point. */
+    fun importDemoMarker(uri: Uri): Result<Unit> = runCatching {
+        val temp = File(directory, "demo_road_voice.tmp")
+        try {
+            val input = requireNotNull(app.contentResolver.openInputStream(uri)) { "음성 파일을 열 수 없어요." }
+            input.use { source ->
+                FileOutputStream(temp).use { target ->
+                    val bytes = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val count = source.read(bytes)
+                        if (count < 0) break
+                        total += count
+                        check(total <= 20L * 1024 * 1024) { "음성 파일은 20MB 이하로 선택해 주세요." }
+                        target.write(bytes, 0, count)
+                    }
+                    check(total > 0L) { "선택한 음성 파일이 비어 있어요." }
+                }
+            }
+            if (markerFile.exists()) check(markerFile.delete()) { "기존 음성 파일을 바꾸지 못했어요." }
+            check(temp.renameTo(markerFile)) { "음성 파일을 저장하지 못했어요." }
+            prefs.edit().putBoolean("marker_consumed", false).apply()
+            hasDemoMarker = true
+        } finally { temp.delete() }
+    }
+
+    fun demoMarkerFile(): File? = markerFile.takeIf { hasDemoMarker && it.isFile }
+
+    /** A played marker stays hidden for the rest of this trip, then returns on a new trip. */
+    fun rearmDemoMarkerForNewTrip(): Boolean {
+        if (hasDemoMarker) return true
+        prefs.edit().putBoolean("marker_consumed", false).apply()
+        if (markerFile.isFile && markerFile.length() > 0L) {
+            hasDemoMarker = true
+        } else {
+            importBundledDemoMarker()
+        }
+        return hasDemoMarker
+    }
+
+    fun resetBundledDemoMarker(): Boolean {
+        val bundled = app.assets.list("")?.any {
+            it in setOf("road_voice_demo.m4a", "road_voice_demo.mp3", "road_voice_demo.wav", "road_voice_demo.ogg")
+        } == true
+        if (!bundled) return false
+        markerFile.delete()
+        hasDemoMarker = false
+        prefs.edit().putBoolean("marker_consumed", false).apply()
+        importBundledDemoMarker()
+        return hasDemoMarker
+    }
+
+    fun useAsDemoMarker(note: RoadVoiceNote) {
+        file(note).copyTo(markerFile, overwrite = true)
+        prefs.edit().putBoolean("marker_consumed", false).apply()
+        hasDemoMarker = true
+    }
+
+    fun consumeDemoMarker() {
+        prefs.edit().putBoolean("marker_consumed", true).apply()
+        hasDemoMarker = false
+    }
 
     fun add(file: File, progress: Float, point: GeoPoint?): RoadVoiceNote {
         require(file.parentFile?.canonicalFile == directory.canonicalFile && file.isFile)

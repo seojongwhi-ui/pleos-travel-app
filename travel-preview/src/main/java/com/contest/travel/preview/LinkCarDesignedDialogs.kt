@@ -41,7 +41,7 @@ internal fun DesignedSettingsDialog(s: WireSession) {
         listOf(
             Triple("메시지 읽어 주기", "다른 차의 말을 음성으로 읽어 줘요", 0),
             Triple("노크 받기", "노크가 오면 10초 안에 문을 열 수 있어요", 1),
-            Triple("길에 남긴 음성 알림", "300m 전에 미리 알려 줘요", 2),
+            Triple("길에 남긴 음성 자동 재생", "켜면 시연 차량이 녹음 지점을 지날 때 재생돼요", 2),
             Triple("음악 신청 받기", "다른 차가 신청한 곡을 함께 들어요", 3),
             Triple("내 점수 공개", "끄면 순위에 이름 대신 점수만 보여요", 4)
         ).forEach { (title, detail, index) ->
@@ -59,6 +59,13 @@ internal fun DesignedSettingsDialog(s: WireSession) {
         Spacer(Modifier.height(20.dp))
         Text("바꾼 설정은 이번 동행에만 적용돼요", Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.labelSmall, color = dialogSub, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(20.dp))
+        Text("전화 수신 시연", style = MaterialTheme.typography.titleMedium, color = dialogInk)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            listOf("다연 차", "문준 차").forEach { car ->
+                TextButton(onClick = { s.simulateIncomingCall(car) }) { Text("$car 전화 보기") }
+            }
+        }
     }
 }
 
@@ -91,7 +98,7 @@ internal fun DesignedEndDialog(s: WireSession) {
 }
 
 @Composable
-internal fun DesignedHistoryDialog(s: WireSession) {
+internal fun DesignedHistoryDialog(s: WireSession, voice: LinkCarVoiceRuntime) {
     DesignDialog({ s.showHistory = false }, Modifier.width(920.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("이전 대화", Modifier.weight(1f),
@@ -111,6 +118,10 @@ internal fun DesignedHistoryDialog(s: WireSession) {
                 Text(label, style = MaterialTheme.typography.labelSmall, color = dialogBlue)
             }
             HorizontalDivider(color = Color(0xFFEDEEF2))
+        }
+        voice.notes.notes.lastOrNull { it.id == s.lastNoteId }?.let { note ->
+            Spacer(Modifier.height(12.dp))
+            TextButton(onClick = { voice.play(note) }) { Text("내가 남긴 음성 듣기") }
         }
     }
 }

@@ -10,6 +10,7 @@ import android.os.Looper
 
 internal data class DrivingUxState(
     val canInteract: Boolean = false,
+    val setupRestricted: Boolean = false,
     val notice: String? = "차량의 화면 사용 상태를 확인하고 있어요."
 )
 
@@ -65,7 +66,12 @@ internal class DrivingUxObserver(
         if (restrictions == null) {
             onState(DrivingUxState(notice = "차량에서 화면 사용 상태를 제공하지 않습니다."))
         } else if (restrictions.isRequiresDistractionOptimization) {
-            onState(DrivingUxState(notice = "안전한 곳에 주차한 뒤 여행 화면을 설정해주세요."))
+            val noSetup = restrictions.activeRestrictions and
+                CarUxRestrictions.UX_RESTRICTIONS_NO_SETUP != 0
+            val noKeyboard = restrictions.activeRestrictions and
+                CarUxRestrictions.UX_RESTRICTIONS_NO_KEYBOARD != 0
+            onState(DrivingUxState(canInteract = true,
+                setupRestricted = noSetup || noKeyboard, notice = null))
         } else {
             onState(DrivingUxState(canInteract = true, notice = null))
         }

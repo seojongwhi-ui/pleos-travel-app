@@ -1,9 +1,6 @@
 package com.contest.travel.preview
 
-import android.os.SystemClock
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
-import kotlinx.coroutines.delay
 
 internal val LocalTripLive = staticCompositionLocalOf { LiveTripState() }
 internal val LocalTripActions = staticCompositionLocalOf { TripActions() }
@@ -11,45 +8,35 @@ internal val LocalConvoy = staticCompositionLocalOf<ConvoyController> { error("C
 
 internal data class ConvoyController(
     val progress: Double,
+    val distanceMeters: Double,
+    val dayeonRouteMeters: Double,
+    val munjunRouteMeters: Double,
+    val speedKph: Float,
+    val motionError: String?,
     val revision: Int,
-    val automatic: Boolean,
-    val secondsUntilUpdate: Int,
     val useRealCar: Boolean,
-    val advance: () -> Unit,
-    val toggleAutomatic: () -> Unit,
-    val toggleRealCar: () -> Unit,
     val reset: () -> Unit
 )
 
+/** The demo route advances only when the vehicle speed signal reports movement. */
 @Composable
-internal fun rememberConvoyController(foreground: Boolean): ConvoyController {
-    var progress by rememberSaveable { mutableDoubleStateOf(.38) }
-    var revision by rememberSaveable { mutableIntStateOf(0) }
-    var automatic by rememberSaveable { mutableStateOf(true) }
-    var realCar by rememberSaveable { mutableStateOf(false) }
-    var updatedAt by rememberSaveable { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-    val advance: () -> Unit = {
-        progress = (progress + .07).coerceAtMost(1.12)
-        revision++
-        updatedAt = SystemClock.elapsedRealtime()
-        now = updatedAt
-    }
-    LaunchedEffect(foreground, automatic) {
-        if (foreground) {
-            // Resume with a full interval rather than advancing while the app was hidden.
-            updatedAt = SystemClock.elapsedRealtime()
-            while (true) {
-                now = SystemClock.elapsedRealtime()
-                if (automatic && now - updatedAt >= 120_000) advance()
-                delay(1_000)
-            }
-        }
-    }
-    return ConvoyController(progress, revision, automatic,
-        ((120_000 - (now - updatedAt)).coerceIn(0, 120_000) / 1000).toInt(), realCar,
-        advance, { automatic = !automatic }, { realCar = !realCar }, {
-            progress = .38; revision = 0; realCar = false
-            updatedAt = SystemClock.elapsedRealtime(); now = updatedAt
-        })
+internal fun rememberConvoyController(motion: VehicleMotionState): ConvoyController {
+    var startMeters by remember { mutableDoubleStateOf(motion.meters) }
+    var revision by remember { mutableIntStateOf(0) }
+    val distance = (motion.meters - startMeters).coerceAtLeast(0.0)
+    // In the 100 km/h demonstration, the two simulated cars travel at 60/40 km/h.
+    // Scaling their distance from the measured own-car distance keeps the spacing stable.
+    return ConvoyController(
+        progress = .36 + distance / demoRouteLengthMeters,
+        distanceMeters = distance,
+        dayeonRouteMeters = (demoRouteLengthMeters * .84 + distance * .60)
+            .coerceAtMost(demoRouteLengthMeters),
+        munjunRouteMeters = (demoRouteLengthMeters * .91 + distance * .40)
+            .coerceAtMost(demoRouteLengthMeters),
+        speedKph = motion.speedKph,
+        motionError = motion.error,
+        revision = revision,
+        useRealCar = false,
+        reset = { startMeters = motion.meters; revision++ }
+    )
 }

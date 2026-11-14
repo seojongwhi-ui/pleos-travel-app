@@ -63,6 +63,19 @@ internal class WireSession {
     var music by mutableStateOf(true)
     var playing by mutableStateOf(true)
     var song by mutableIntStateOf(0)
+    var musicPositionSeconds by mutableIntStateOf(0)
+    val musicProgress get() = musicPositionSeconds / 180f
+
+    fun skipSong(direction: Int) {
+        song = (song + direction + 3) % 3
+        musicPositionSeconds = 0
+    }
+
+    fun advanceMusic() {
+        if (!music || !playing) return
+        musicPositionSeconds++
+        if (musicPositionSeconds >= 180) skipSong(1)
+    }
     var progress by mutableFloatStateOf(0f)
     var tripMotionStarted by mutableStateOf(false)
     var demoVoiceTriggered by mutableStateOf(false)
@@ -133,6 +146,9 @@ internal class WireSession {
         createRecentSelection = null
         destinationQuery = ""
         progress = 0f
+        song = 0
+        musicPositionSeconds = 0
+        playing = true
         tripMotionStarted = false
         demoVoiceTriggered = false
         incomingCaller = "다연 차"
@@ -227,6 +243,13 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
             s.showEnd = false
             s.showHistory = false
             s.showPollTextEntry = false
+        }
+    }
+
+    LaunchedEffect(s.music, s.playing, screen.isDriving, foreground) {
+        while (s.music && s.playing && screen.isDriving && foreground) {
+            delay(1_000)
+            s.advanceMusic()
         }
     }
 

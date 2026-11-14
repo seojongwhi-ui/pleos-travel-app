@@ -388,13 +388,13 @@ private fun WireDj(s: WireSession, expanded: Boolean, enabled: Boolean) {
                     style = MaterialTheme.typography.titleLarge, color = Wire.ink)
                 WireSub(if (s.music) "아이유 · 문준님이 골랐어요" else "음악 없이 출발했어요")
             }
-            LinearProgressIndicator(progress = { .4f }, modifier = Modifier.width(200.dp),
+            LinearProgressIndicator(progress = { s.musicProgress }, modifier = Modifier.width(200.dp),
                 color = Wire.action, trackColor = Wire.mutedStrong)
-            WireButton("◀", { s.song = (s.song + 2) % 3 }, filled = false,
+            WireButton("◀", { s.skipSong(-1) }, filled = false,
                 enabled = enabled && s.music, width = 70.dp, height = 70.dp)
             WireButton(if (s.playing) "Ⅱ" else "▶", { s.playing = !s.playing },
                 enabled = enabled && s.music, width = 82.dp, height = 82.dp)
-            WireButton("▶", { s.song = (s.song + 1) % 3 }, filled = false,
+            WireButton("▶", { s.skipSong(1) }, filled = false,
                 enabled = enabled && s.music, width = 70.dp, height = 70.dp)
             WireChip("다음 곡 · 신청한 차")
         }

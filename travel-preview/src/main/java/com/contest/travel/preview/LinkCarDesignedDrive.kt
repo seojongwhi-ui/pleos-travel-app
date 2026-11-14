@@ -1150,13 +1150,13 @@ private fun DesignedMusicBar(s: WireSession, enabled: Boolean, motionAllowed: Bo
                 Row(horizontalArrangement = Arrangement.spacedBy(28.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     MusicIcon(R.drawable.drive_media_previous, "이전 곡", enabled && s.music) {
-                        s.song = (s.song + 2) % 3
+                        s.skipSong(-1)
                     }
                     MusicIcon(if (s.playing) R.drawable.drive_media_pause
                         else R.drawable.drive_media_play, if (s.playing) "일시정지" else "재생",
                         enabled && s.music) { s.playing = !s.playing }
                     MusicIcon(R.drawable.drive_media_next, "다음 곡", enabled && s.music) {
-                        s.song = (s.song + 1) % 3
+                        s.skipSong(1)
                     }
                 }
                 Spacer(Modifier.width(156.dp))
@@ -1189,7 +1189,7 @@ private fun DesignedMusicBar(s: WireSession, enabled: Boolean, motionAllowed: Bo
             }
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp)
                 .background(DriveDesign.Track.copy(alpha = .4f))) {
-                Box(Modifier.fillMaxWidth(.44f).fillMaxHeight().background(Color.White))
+                Box(Modifier.fillMaxWidth(s.musicProgress).fillMaxHeight().background(Color.White))
             }
         }
     }
@@ -1211,19 +1211,19 @@ private fun DesignedMusicExpanded(s: WireSession, enabled: Boolean, height: Dp) 
                 Text(if (s.music) "아이유 · 문준 차 신청" else "음악 없이 출발했어요",
                     style = MaterialTheme.typography.labelMedium, color = DriveDesign.Subtle)
                 Spacer(Modifier.height(40.dp))
-                LinearProgressIndicator(progress = { .44f }, modifier = Modifier.fillMaxWidth(),
+                LinearProgressIndicator(progress = { s.musicProgress }, modifier = Modifier.fillMaxWidth(),
                     color = DriveDesign.Black, trackColor = DriveDesign.Input)
                 Spacer(Modifier.height(30.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     MusicIcon(R.drawable.drive_media_previous, "이전 곡", enabled && s.music) {
-                        s.song = (s.song + 2) % 3
+                        s.skipSong(-1)
                     }
                     MusicIcon(if (s.playing) R.drawable.drive_media_pause
                         else R.drawable.drive_media_play, if (s.playing) "일시정지" else "재생",
                         enabled && s.music) { s.playing = !s.playing }
                     MusicIcon(R.drawable.drive_media_next, "다음 곡", enabled && s.music) {
-                        s.song = (s.song + 1) % 3
+                        s.skipSong(1)
                     }
                 }
             }

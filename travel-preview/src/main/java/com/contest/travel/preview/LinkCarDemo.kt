@@ -47,6 +47,8 @@ internal enum class WireScreen {
     VOICE_LEAVE, VOICE_RECEIVED, VOICE_APPROACH, VOICE_DELIVER,
     ARRIVED, SUMMARY, SAVE;
 
+    val isEnding get() = this in setOf(ARRIVED, SUMMARY, SAVE)
+
     val isDriving get() = this in setOf(DRIVE, MAP, DJ, KNOCK_SENT, KNOCK_RECEIVED,
         KNOCK_FULL, INCOMING_CALL, CALL, CALL_DECLINED,
         VOICE_LEAVE, VOICE_RECEIVED, VOICE_APPROACH, VOICE_DELIVER)
@@ -65,6 +67,8 @@ internal class WireSession {
     val drivingScores = CompanionScores()
     var motionPreview by mutableStateOf(false)
     var drivingSimulation by mutableStateOf(false)
+    var demoArrival by mutableStateOf(false)
+        private set
     var pendingKnockTarget by mutableStateOf<String?>(null)
     var knockRequestRevision by mutableIntStateOf(0)
         private set
@@ -183,6 +187,7 @@ internal class WireSession {
     }
 
     fun startLocalTrip(withMusic: Boolean) {
+        demoArrival = false
         drivingScores.reset()
         music = withMusic
         playing = withMusic
@@ -196,6 +201,7 @@ internal class WireSession {
         open(WireScreen.DRIVE)
     }
     fun drive() {
+        demoArrival = false
         designPreviewNode = null
         drivingIdle = true
         navigationDirection = -1
@@ -272,6 +278,16 @@ internal class WireSession {
         designPreviewNode = null
         if (!keepExpandedPanel || screen !in setOf(WireScreen.MAP, WireScreen.DJ)) drive()
     }
+    fun arriveForDemo() {
+        if (!screen.isDriving) return
+        clearDrivingOverlays()
+        pendingKnockTarget = null
+        knockTimedOut = false
+        demoArrival = true
+        // A completed trip cannot return to a pending knock or recording with Back.
+        while (stack.size > 1 && stack.last().isDriving) stack.removeAt(stack.lastIndex)
+        open(WireScreen.ARRIVED)
+    }
     fun respondToProposal(accepted: Boolean) {
         vote = if (accepted) generatedPoll?.options?.firstOrNull() ?: "accepted"
             else generatedPoll?.options?.getOrNull(1) ?: "rejected"
@@ -304,6 +320,7 @@ internal class WireSession {
         open(WireScreen.CALL_DECLINED)
     }
     fun home() {
+        demoArrival = false
         drivingScores.reset()
         pendingKnockTarget = null
         designPreviewNode = null
@@ -581,7 +598,7 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
             Column(Modifier.fillMaxSize().then(if (designWide || page.isPreDrive)
                 Modifier.background(DesignedJourneyBackdrop) else Modifier)
                 .padding(if (page.isPreDrive || page.isDriving || (designWide && page == WireScreen.SUMMARY)) 0.dp else 12.dp)) {
-                if (setupRestricted && !page.isDriving) {
+                if (setupRestricted && !page.isDriving && !canShowDemoEnding(s, page, convoy.useRealCar)) {
                     DrivingHoldingScreen()
                 } else when {
                     page.isPreDrive -> FigmaJourneyExact(s, page, enabled && page == s.screen)

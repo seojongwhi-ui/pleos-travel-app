@@ -76,8 +76,9 @@ private fun ColumnScope.WireSummary(s: WireSession, wide: Boolean, enabled: Bool
             Spacer(Modifier.height(18.dp))
             Row(Modifier.fillMaxWidth().height(350.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.Bottom) {
-                listOf(Triple("2", "다연", "92점"), Triple("1", "문준", "96점"),
-                    Triple("3", "나", "85점")).forEach { (rank, name, score) ->
+                listOf(Triple("2", "다연", "${s.drivingScores.score("다연 차")}점"),
+                    Triple("1", "문준", "${s.drivingScores.score("문준 차")}점"),
+                    Triple("3", "나", "점수 비공개")).forEach { (rank, name, score) ->
                     val height = when (rank) { "1" -> 270.dp; "2" -> 220.dp; else -> 190.dp }
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         WireAvatar(name, 80.dp)
@@ -149,7 +150,7 @@ private fun ColumnScope.WireSave(s: WireSession, enabled: Boolean) {
                     Spacer(Modifier.width(16.dp))
                     Text("다연 · 문준 · 나", style = MaterialTheme.typography.labelMedium, color = Wire.ink)
                     Spacer(Modifier.width(16.dp))
-                    WireChip("내 순위 3위 · 85점")
+                    WireChip("내 순위 3위")
                 }
                 Spacer(Modifier.height(18.dp))
                 WireRow("AI 하이라이트 · \"호두과자 3:0 만장일치\" 외 2개", "",

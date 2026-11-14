@@ -278,7 +278,7 @@ internal fun ColumnScope.FigmaDriving(s: WireSession, screen: WireScreen, enable
             CompositionLocalProvider(LocalDrivingAssets provides drivingFigmaAssets.getValue(drivingFigmaNode(s, screen))) {
             Box(Modifier.size(1700.dp, 1184.dp).align(Alignment.Center).clip(RoundedCornerShape(0.dp))
                 .background(DesignedJourneyBackdrop).trackDrivingInteraction(s)) {
-                DHeader(s, enabled && !setupRestricted)
+                DHeader(s, enabled, setupRestricted) { finishDrivingDemo(s, voice) }
                 DRoute(s, screen, mapHeight, enabled, voice, onResetDemo)
                 DPanel(24, bodyY, 1022, bodyH) {
                     val feedSource = if (s.designPreviewNode == null) drivingFigmaNode(s, WireScreen.DRIVE)
@@ -340,18 +340,21 @@ internal fun ColumnScope.FigmaDriving(s: WireSession, screen: WireScreen, enable
 }
 
 @Composable
-private fun DHeader(s: WireSession, enabled: Boolean) {
+private fun DHeader(s: WireSession, enabled: Boolean, setupRestricted: Boolean,
+    onDemoArrival: () -> Unit) {
     val authoredModalSnapshot = s.designPreviewNode in setOf("443:24791", "443:25023")
+    val statusBoxColor = Color(0xFFF0F2F6)
     DText(if (s.destination.startsWith("가평")) "가평 계곡 여행" else "${s.destination} 여행", 56, 18,
         DType.Header, DrivingFigma.Title)
     DText("순위는 안전 운전 점수로 정해져요", 56, 62, DType.Subtitle, Color(0xFF9398A5))
-    if (s.drivingSimulation) {
-        val motion = LocalVehicleMotion.current
-        DChip(if (motion.error != null) "운전 신호를 확인해 주세요" else "다연 차 운전 시연 · ${motion.gearLabel}",
-            984, 30, 300, 42)
-    }
     if (!authoredModalSnapshot) {
-    DPanel(1309, 25, 223, 56, 12, Color(0xFFF0F2F6))
+    if (!LocalConvoy.current.useRealCar) DPanel(1086, 25, 211, 56, 12, statusBoxColor,
+        Modifier.semantics { contentDescription = "시연종료-도착시" }
+            .linkCarPress(enabled, onClick = onDemoArrival)) {
+        Text("시연종료-도착시", Modifier.align(Alignment.Center),
+            style = DType.Meta.style(DrivingFigma.Hint), maxLines = 1)
+    }
+    DPanel(1309, 25, 223, 56, 12, statusBoxColor)
     val real = LocalConvoy.current.useRealCar && s.designPreviewNode == null
     val live = LocalTripLive.current
     val range = if (!real) "462km" else live.meters.value?.takeIf { live.meters.status == ReadStatus.READY }
@@ -364,11 +367,11 @@ private fun DHeader(s: WireSession, enabled: Boolean) {
         if (battery != null && i < (battery * 8 / 100f).toInt()) Color(0xFF52E79C) else Color(0xFFDDDFE4)) }
     }
     DPanel(1540, 12, 68, 72, 0, Color.Transparent,
-        Modifier.semantics { contentDescription = "설정" }.linkCarPress(enabled) {
+        Modifier.semantics { contentDescription = "설정" }.linkCarPress(enabled && !setupRestricted) {
             s.showSettings = true
         }) { DImage(R.drawable.driving_1ce48, 16, if (authoredModalSnapshot) 14 else 17, 48, 48) }
     DPanel(1602, 12, 68, 72, 0, Color.Transparent,
-        Modifier.semantics { contentDescription = "동행 종료" }.linkCarPress(enabled) {
+        Modifier.semantics { contentDescription = "동행 종료" }.linkCarPress(enabled && !setupRestricted) {
             s.showEnd = true
         }) { DImage(R.drawable.driving_81be0, 10, if (authoredModalSnapshot) 14 else 17, 48, 48) }
 }

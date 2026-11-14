@@ -1032,17 +1032,41 @@ private fun FMusic(s: WireSession, enabled: Boolean) {
 
 
 @Composable
-private fun FScoreRing(x: Int, y: Int, score: Int, color: Color) {
-    Canvas(Modifier.offset(x.dp, y.dp).size(150.dp)) {
-        val stroke = 14.dp.toPx()
-        val inset = stroke / 2
-        val origin = Offset(inset, inset)
-        val ringSize = Size(size.width - stroke, size.height - stroke)
-        drawArc(Color(0xFFEBEDF6), 0f, 360f, false,
-            topLeft = origin, size = ringSize, style = Stroke(stroke))
-        drawArc(color, -90f, score.coerceIn(0, 100) * 3.6f, false,
-            topLeft = origin, size = ringSize,
-            style = Stroke(stroke, cap = StrokeCap.Round))
+private fun FScoreRing(x: Int, y: Int, score: Int?, color: Color) {
+    Box(Modifier.offset(x.dp, y.dp).size(193.dp, 150.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(150.dp)) {
+            val stroke = 14.dp.toPx()
+            val inset = stroke / 2
+            val origin = Offset(inset, inset)
+            val ringSize = Size(size.width - stroke, size.height - stroke)
+            drawArc(Color(0xFFEBEDF6), 0f, 360f, false,
+                topLeft = origin, size = ringSize, style = Stroke(stroke))
+            if (score != null) drawArc(color, -90f, score.coerceIn(0, 100) * 3.6f, false,
+                topLeft = origin, size = ringSize,
+                style = Stroke(stroke, cap = StrokeCap.Round))
+        }
+        FSummaryValue(score?.toString() ?: "비공개", if (score == null) 24 else 39,
+            if (score == null) 32 else 48, color, FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun FSummaryValue(value: String, size: Int, line: Int, color: Color,
+    weight: FontWeight = FontWeight.Normal) {
+    Text(value, style = TextStyle(fontFamily = FFont, fontSize = size.sp,
+        lineHeight = line.sp, color = color, fontWeight = weight,
+        platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+            androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+            androidx.compose.ui.text.style.LineHeightStyle.Trim.Both)),
+        textAlign = TextAlign.Center, maxLines = 1)
+}
+
+@Composable
+private fun FSummaryCenteredValue(value: String, x: Int, y: Int, h: Int,
+    size: Int, line: Int, color: Color, weight: FontWeight = FontWeight.Normal) {
+    Box(Modifier.offset(x.dp, y.dp).size(193.dp, h.dp), contentAlignment = Alignment.Center) {
+        FSummaryValue(value, size, line, color, weight)
     }
 }
 
@@ -1075,19 +1099,19 @@ private fun FSummary(s: WireSession, enabled: Boolean) {
         FLabel(title, x, 958, 24, 32, FMuted)
     }
     FLabel("안전 운전 순위", 968, 185, 36, 46, weight = FontWeight.Bold)
-    listOf(Triple("나", "85", R.drawable.flow_imgprofilephoto),
-        Triple("다연", "88", R.drawable.invite_dayeon),
-        Triple("문준", "66", R.drawable.invite_munjun)).forEachIndexed { i, (name, score, image) ->
+    listOf(Triple("나", null, R.drawable.flow_imgprofilephoto),
+        Triple("다연", s.drivingScores.score("다연 차"), R.drawable.invite_dayeon),
+        Triple("문준", s.drivingScores.score("문준 차"), R.drawable.invite_munjun)).forEachIndexed { i, (name, score, image) ->
         val x = 1006 + i * 214
-        FAvatar(image, x + 25, 260, 125, name)
-        FLabel(name, x + 64 - name.length * 7, 401, 30, 38, weight = FontWeight.Bold)
-        FScoreRing(x + 14, 493, score.toInt(), if (i == 2) FRed else FBlue)
-        FLabel(score, x + 49, 536, 39, 48, if (i == 2) FRed else FBlue, FontWeight.Bold)
-        FLabel(if (i == 1) "1시간 15분" else if (i == 0) "1시간 36분" else "1시간 28분",
-            x + 10, 687, 23, 32, FMuted)
+        FAvatar(image, x + 34, 260, 125, name)
+        FSummaryCenteredValue(name, x, 401, 38, 30, 38, FInk, FontWeight.Bold)
+        val scoreColor = if (score == null) FMuted else if (isLowDrivingScore(score)) FRed else FBlue
+        FScoreRing(x, 493, score, scoreColor)
+        FSummaryCenteredValue(if (i == 1) "1시간 15분" else if (i == 0) "1시간 36분" else "1시간 28분",
+            x, 687, 32, 23, 32, FMuted)
         FRect(x, 736, 193, 115, if (i == 1) Color(0xFFCDD6FF) else FPale, 25)
-        FLabel((if (i == 0) 2 else if (i == 1) 1 else 3).toString(),
-            x + 85, 766, 34, 44, FMuted, FontWeight.Bold)
+        FSummaryCenteredValue((if (i == 0) 2 else if (i == 1) 1 else 3).toString(),
+            x, 736, 115, 34, 44, FMuted, FontWeight.Bold)
     }
     FRect(968, 869, 668, 137, FPale, 40)
     FRect(1006, 896, 78, 78, Color.White, 39)

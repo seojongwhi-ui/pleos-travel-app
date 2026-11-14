@@ -45,11 +45,24 @@ internal fun Modifier.trackDrivingInteraction(s: WireSession): Modifier = pointe
 
 /** Interrupt audio before clearing UI state, so an in-progress recording is saved, not discarded. */
 internal fun sendPriorityKnock(s: WireSession, voice: LinkCarVoiceRuntime, target: String) {
+    saveAndStopDrivingVoice(s, voice)
+    s.sendKnock(target)
+}
+
+internal fun finishDrivingDemo(s: WireSession, voice: LinkCarVoiceRuntime) {
+    saveAndStopDrivingVoice(s, voice)
+    s.arriveForDemo()
+}
+
+/** Only this explicit local demonstration may show ending pages with a moving console. */
+internal fun canShowDemoEnding(s: WireSession, page: WireScreen, realCar: Boolean): Boolean =
+    s.demoArrival && page.isEnding && !realCar
+
+private fun saveAndStopDrivingVoice(s: WireSession, voice: LinkCarVoiceRuntime) {
     voice.audio.stopPlayback()
     voice.stopListening()
     if (voice.isRecording) {
         val kind = when (s.recordingTarget) { null -> "road"; "모두에게" -> "broadcast"; else -> "message" }
         voice.finishRecording(s.progress, null, kind)?.let { s.lastNoteId = it.id }
     }
-    s.sendKnock(target)
 }

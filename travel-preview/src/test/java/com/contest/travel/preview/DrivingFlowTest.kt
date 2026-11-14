@@ -4,6 +4,45 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DrivingFlowTest {
+    @Test fun demoArrivalClosesActivePanelsAndCannotReviveAnEarlierKnock() {
+        val s = WireSession().apply {
+            startLocalTrip(true)
+            open(WireScreen.MAP)
+            sendKnock("문준 차")
+            beginVoiceRecording("문준 차")
+            showHistory = true
+            showSettings = true
+            lastNoteId = "saved-recording"
+        }
+        s.arriveForDemo()
+        assertEquals(listOf(WireScreen.HOME, WireScreen.ARRIVED), s.stack.toList())
+        assertFalse(s.showVoiceRecorder || s.showHistory || s.showSettings)
+        assertEquals("saved-recording", s.lastNoteId)
+        s.expirePendingKnock()
+        assertFalse(s.acceptPendingDemoKnock())
+        assertEquals(WireScreen.ARRIVED, s.screen)
+        s.open(WireScreen.SUMMARY)
+        s.open(WireScreen.SAVE)
+        s.back()
+        assertEquals(WireScreen.SUMMARY, s.screen)
+        s.home()
+        assertFalse(s.demoArrival)
+    }
+
+    @Test fun movingConsoleMayShowOnlyExplicitDemoEndingPagesNeverRealCarOrSetupPages() {
+        val s = WireSession().apply { startLocalTrip(true) }
+        assertFalse(canShowDemoEnding(s, WireScreen.ARRIVED, false))
+        s.arriveForDemo()
+        for (page in listOf(WireScreen.ARRIVED, WireScreen.SUMMARY, WireScreen.SAVE)) {
+            assertTrue(canShowDemoEnding(s, page, false))
+            assertFalse(canShowDemoEnding(s, page, true))
+        }
+        assertFalse(canShowDemoEnding(s, WireScreen.HOME, false))
+        assertFalse(canShowDemoEnding(s, WireScreen.CREATE, false))
+        s.startLocalTrip(true)
+        assertFalse(s.demoArrival)
+    }
+
     @Test fun closingAnyPreviewFeedReturnsToTheIdleHomeWithoutRevivingTheSongMessage() {
         for (node in listOf("443:21058", "443:22235", "443:24648", "443:23484")) {
             val s = WireSession().apply { applyDrivingDesignPreview(node) }

@@ -37,9 +37,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.ConnectException
 
-/** The 21 frames in Figma section 252:11453. */
+internal val linkCarSongs = listOf("밤편지" to "아이유", "여행" to "볼빨간사춘기", "좋은 밤" to "릴보이")
+
+/** Shared journey state; current driving designs are in Figma section 443:20589. */
 internal enum class WireScreen {
     HOME, CREATE, INVITE, WAITING, MISSION, MUSIC_PICK, FIRST_SONG,
+    WAITING_DECLINED, INVITE_CONFIRM, SHARE_SCOPE, GUEST_WAITING,
     DRIVE, MAP, DJ, KNOCK_SENT, KNOCK_RECEIVED, KNOCK_FULL, INCOMING_CALL, CALL, CALL_DECLINED,
     VOICE_LEAVE, VOICE_RECEIVED, VOICE_APPROACH, VOICE_DELIVER,
     ARRIVED, SUMMARY, SAVE;
@@ -47,34 +50,58 @@ internal enum class WireScreen {
     val isDriving get() = this in setOf(DRIVE, MAP, DJ, KNOCK_SENT, KNOCK_RECEIVED,
         KNOCK_FULL, INCOMING_CALL, CALL, CALL_DECLINED,
         VOICE_LEAVE, VOICE_RECEIVED, VOICE_APPROACH, VOICE_DELIVER)
+
+    val isPreDrive get() = this in setOf(HOME, CREATE, INVITE, WAITING, MISSION,
+        MUSIC_PICK, FIRST_SONG, WAITING_DECLINED, INVITE_CONFIRM, SHARE_SCOPE, GUEST_WAITING)
 }
 
 internal class WireSession {
     val stack = mutableStateListOf(WireScreen.HOME)
     val screen get() = stack.last()
+    var navigationDirection by mutableIntStateOf(1)
+    var designPreviewNode by mutableStateOf<String?>(null)
+    var drivingIdle by mutableStateOf(true)
+    var proposalVisible by mutableStateOf(false)
+    val drivingScores = CompanionScores()
+    var motionPreview by mutableStateOf(false)
+    var drivingSimulation by mutableStateOf(false)
+    var pendingKnockTarget by mutableStateOf<String?>(null)
+    var demoKnockAutoAnswer by mutableStateOf(true)
+    var isGuest by mutableStateOf(false)
+    var guestHasPassenger by mutableStateOf(false)
+    var sharingConfirmed by mutableStateOf(false)
+    var sharingOptions: List<Boolean>
+        get() = listOf(settingsToggles[1], settingsToggles[2], settingsToggles[3])
+        set(value) {
+            settingsToggles = settingsToggles.mapIndexed { index, old ->
+                if (index in 1..3) value[index - 1] else old
+            }
+        }
+    var declinedInvitees by mutableStateOf(emptySet<String>())
     var purpose by mutableStateOf("친구 여행")
     var destination by mutableStateOf("가평 용추계곡")
     var createPurposeSelection by mutableStateOf<String?>(null)
     var createRecentSelection by mutableStateOf<String?>(null)
     var destinationQuery by mutableStateOf("")
     var invitees by mutableStateOf(setOf("다연", "문준"))
+    val orderedInvitees get(): List<String> {
+        val roster = listOf("다연", "문준", "성윤", "민석", "현진", "준호")
+        return roster.filter { it in invitees } + invitees.filterNot { it in roster }
+    }
     var phone by mutableStateOf("")
     var mission by mutableStateOf(true)
     var music by mutableStateOf(true)
     var playing by mutableStateOf(true)
     var song by mutableIntStateOf(0)
-    var musicPositionSeconds by mutableIntStateOf(0)
-    val musicProgress get() = musicPositionSeconds / 180f
+    var songSeek by mutableFloatStateOf(0f)
+    val musicProgress get() = songSeek
 
-    fun skipSong(direction: Int) {
-        song = (song + direction + 3) % 3
-        musicPositionSeconds = 0
-    }
+    fun skipSong(direction: Int) = stepSong(direction)
 
     fun advanceMusic() {
         if (!music || !playing) return
-        musicPositionSeconds++
-        if (musicPositionSeconds >= 180) skipSong(1)
+        val next = songSeek + 1f / 180f
+        if (next >= 1f - 0.00001f) stepSong(1) else songSeek = next
     }
     var progress by mutableFloatStateOf(0f)
     var tripMotionStarted by mutableStateOf(false)
@@ -87,7 +114,7 @@ internal class WireSession {
     var roadVoiceShown by mutableStateOf(false)
     var saved by mutableStateOf(false)
     var showSettings by mutableStateOf(false)
-    var settingsToggles by mutableStateOf(listOf(true, true, false, true, false))
+    var settingsToggles by mutableStateOf(listOf(true, true, true, false, false))
     var showEnd by mutableStateOf(false)
     var showHistory by mutableStateOf(false)
     var message by mutableStateOf("")
@@ -109,12 +136,47 @@ internal class WireSession {
     }
 
     fun open(next: WireScreen) {
+        designPreviewNode = null
+        navigationDirection = 1
         if (screen != next) stack.add(next)
     }
     fun back() {
+        navigationDirection = -1
         if (stack.size > 1) stack.removeAt(stack.lastIndex)
     }
+    val canSendInvites get() = invitees.isNotEmpty() || phone.count(Char::isDigit) in 9..15
+
+    fun toggleInvitee(name: String) {
+        invitees = if (name in invitees) invitees - name
+            else if (invitees.size < 3) invitees + name else invitees
+    }
+
+    fun sendInvites() {
+        if (!canSendInvites) return
+        if (phone.count(Char::isDigit) in 9..15 && invitees.size < 3) invitees += phone
+        declinedInvitees = emptySet()
+        isGuest = false
+        open(WireScreen.WAITING)
+    }
+
+    fun startLocalTrip(withMusic: Boolean) {
+        drivingScores.reset()
+        music = withMusic
+        playing = withMusic
+        song = 0
+        songSeek = 0f
+        progress = 0f
+        tripMotionStarted = false
+        demoVoiceTriggered = false
+        drivingIdle = true
+        proposalVisible = false
+        open(WireScreen.DRIVE)
+    }
     fun drive() {
+        designPreviewNode = null
+        navigationDirection = -1
+        showHistory = false
+        showVoiceMenu = false
         while (stack.size > 1 && stack.last().isDriving) stack.removeAt(stack.lastIndex)
         if (screen != WireScreen.DRIVE) stack.add(WireScreen.DRIVE)
     }
@@ -129,25 +191,70 @@ internal class WireSession {
     }
     fun startKnockCall() {
         incomingCaller = knockTarget
+        seconds = 30
         open(WireScreen.CALL)
     }
     fun sendKnock(target: String) {
         knockTarget = target
+        seconds = 10
         open(WireScreen.KNOCK_SENT)
+    }
+    fun acceptPendingDemoKnock(): Boolean {
+        if (screen != WireScreen.KNOCK_SENT) return false
+        startKnockCall()
+        return true
+    }
+    fun returnToDrivingMain() {
+        showVoiceRecorder = false
+        speechFeedbackVisible = false
+        pollDemoVisible = false
+        pollDemoSpeaking = false
+        roadVoiceShown = false
+        drive()
+    }
+    fun respondToProposal(accepted: Boolean) {
+        vote = if (accepted) generatedPoll?.options?.firstOrNull() ?: "accepted"
+            else generatedPoll?.options?.getOrNull(1) ?: "rejected"
+        proposalVisible = false
+        generatedPoll = null
+        drivingIdle = false
+        if (accepted) { waypoint = true; open(WireScreen.MAP) } else drive()
+    }
+    fun stepSong(delta: Int) {
+        if (!music) return
+        designPreviewNode = null
+        song = Math.floorMod(song + delta, linkCarSongs.size)
+        songSeek = 0f
+    }
+    fun toggleMusicPlayback() {
+        if (!music) return
+        designPreviewNode = null
+        playing = !playing
     }
     fun declineIncomingCall() {
         if (screen != WireScreen.INCOMING_CALL) return
         open(WireScreen.CALL_DECLINED)
     }
     fun home() {
+        drivingScores.reset()
+        pendingKnockTarget = null
+        designPreviewNode = null
+        drivingIdle = true
+        proposalVisible = false
+        showSettings = false
+        showEnd = false
+        showHistory = false
+        navigationDirection = -1
         stack.clear()
         stack.add(WireScreen.HOME)
+        isGuest = false
+        declinedInvitees = emptySet()
         createPurposeSelection = null
         createRecentSelection = null
         destinationQuery = ""
         progress = 0f
         song = 0
-        musicPositionSeconds = 0
+        songSeek = 0f
         playing = true
         tripMotionStarted = false
         demoVoiceTriggered = false
@@ -180,8 +287,30 @@ internal object Wire {
 internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted: Boolean,
     foreground: Boolean,
     onExit: () -> Unit, modifier: Modifier = Modifier) {
-    val s = remember { WireSession() }
     val context = LocalContext.current
+    // This debug-only entry point lets designers inspect event-driven invitation
+    // states without pretending a real push notification or another car exists.
+    val designIntent = (context as? android.app.Activity)?.intent?.takeIf {
+        context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+            it.action == "com.contest.travel.preview.DESIGN_PREVIEW"
+    }
+    val previewNode = designIntent?.getStringExtra("figmaNode")
+    val previewDrive = designIntent?.getBooleanExtra("drivingSimulation", false) == true
+    val previewMotion = !previewDrive && designIntent?.getBooleanExtra("companionMotion", false) == true
+    val s = remember(previewNode, previewMotion, previewDrive) { WireSession().apply {
+        applyDesignPreview(previewNode)
+        demoKnockAutoAnswer = designIntent?.getBooleanExtra("knockAutoAnswer", true) != false
+        if (previewMotion) { motionPreview = true; drivingScores.reset(100, 64) }
+        if (previewDrive) {
+            drivingSimulation = true; designPreviewNode = null; drivingScores.reset(100, 64)
+        }
+    } }
+    LaunchedEffect(s, previewMotion) {
+        if (previewMotion) {
+            delay(2200)
+            s.drivingScores.deduct("다연 차", 3, "급가속")
+        }
+    }
     val voice = remember { LinkCarVoiceRuntime(context) }
     val demoAudioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -221,13 +350,39 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
         }
     }
     DisposableEffect(voice) { onDispose { voice.release() } }
+    DisposableEffect(voice, s.pollDemoVisible) {
+        val demoWasVisible = s.pollDemoVisible
+        onDispose { if (demoWasVisible) voice.audio.stopPlayback() }
+    }
     val naviPoint = live.location.value?.takeIf { live.location.status == ReadStatus.READY && it.isValid() }
     LaunchedEffect(naviPoint) { voice.updateFallbackPoint(naviPoint) }
     LaunchedEffect(foreground) { if (foreground) voice.startLocation() else voice.release() }
     val convoy by rememberUpdatedState(LocalConvoy.current)
+    LaunchedEffect(convoy.dayeonScore, convoy.munjunScore, s.drivingSimulation,
+        s.designPreviewNode) {
+        if (!s.drivingSimulation && s.designPreviewNode == null) {
+            s.drivingScores.showConvoyScores(convoy.dayeonScore, convoy.munjunScore)
+        }
+    }
+    val vehicleMotion = LocalVehicleMotion.current
+    val penaltyDetector = remember(s) { DrivingPenaltyDetector() }
     val screen = s.screen
+    LaunchedEffect(vehicleMotion.sampleId, vehicleMotion.gear, vehicleMotion.error,
+        foreground, s.drivingSimulation, screen.isDriving) {
+        if (!s.drivingSimulation || !foreground || !screen.isDriving) penaltyDetector.reset()
+        else penaltyDetector.sample(vehicleMotion.sampleTimeMillis,
+            vehicleMotion.speedMetersPerSecond.toDouble(), vehicleMotion.inDrive,
+            vehicleMotion.error == null && vehicleMotion.sampleId > 0).forEach { event ->
+            // One-emulator test mode explicitly uses this signal as the simulated Dayeon vehicle.
+            // Own-car scores remain hidden; this is not remote telemetry from another car.
+            s.drivingScores.deduct("다연 차", event.points, event.reason)
+        }
+    }
     BackHandler {
-        if (s.showVoiceRecorder) s.showVoiceRecorder = false
+        if (s.showEnd) s.showEnd = false
+        else if (s.showSettings) s.showSettings = false
+        else if (s.showHistory) s.showHistory = false
+        else if (s.showVoiceRecorder) s.showVoiceRecorder = false
         else if (s.showVoiceMenu) s.showVoiceMenu = false
         else if (s.pollDemoVisible) {
             voice.audio.stopPlayback()
@@ -246,14 +401,16 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
         }
     }
 
-    LaunchedEffect(s.music, s.playing, screen.isDriving, foreground) {
-        while (s.music && s.playing && screen.isDriving && foreground) {
+    LaunchedEffect(s.music, s.playing, screen.isDriving, foreground, s.designPreviewNode) {
+        while (s.music && s.playing && screen.isDriving && foreground &&
+            s.designPreviewNode == null) {
             delay(1_000)
             s.advanceMusic()
         }
     }
 
-    LaunchedEffect(screen) {
+    LaunchedEffect(screen, s.designPreviewNode) {
+        if (s.designPreviewNode != null) return@LaunchedEffect
         when (screen) {
             WireScreen.KNOCK_SENT -> {
                 s.seconds = 10
@@ -282,7 +439,8 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
             else -> Unit
         }
     }
-    LaunchedEffect(screen.isDriving, convoy.distanceMeters, foreground, voice.notes.hasDemoMarker) {
+    LaunchedEffect(screen.isDriving, convoy.distanceMeters, foreground, voice.notes.hasDemoMarker, s.designPreviewNode) {
+        if (s.designPreviewNode != null) return@LaunchedEffect
         if (!screen.isDriving) {
             s.tripMotionStarted = false
             return@LaunchedEffect
@@ -307,34 +465,19 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val contentWide = wide && maxWidth >= 900.dp
             val designWide = maxWidth >= 1500.dp
-            Column(Modifier.fillMaxSize().then(if (designWide)
+            LinkCarPageTransition(screen, s.navigationDirection, Modifier.fillMaxSize()) { page ->
+            Column(Modifier.fillMaxSize().then(if (designWide || page.isPreDrive)
                 Modifier.background(DesignedJourneyBackdrop) else Modifier)
-                .padding(horizontal = if (designWide && screen in setOf(WireScreen.HOME,
-                        WireScreen.CREATE, WireScreen.INVITE, WireScreen.WAITING,
-                        WireScreen.MISSION, WireScreen.MUSIC_PICK, WireScreen.FIRST_SONG,
-                        WireScreen.SUMMARY)) 0.dp else 12.dp,
-                    vertical = if (designWide && screen in setOf(WireScreen.HOME,
-                        WireScreen.CREATE, WireScreen.INVITE, WireScreen.WAITING,
-                        WireScreen.MISSION, WireScreen.MUSIC_PICK, WireScreen.FIRST_SONG,
-                        WireScreen.SUMMARY)) 0.dp else 12.dp)) {
-                if (setupRestricted && !screen.isDriving) {
+                .padding(if (page.isPreDrive || page.isDriving || (designWide && page == WireScreen.SUMMARY)) 0.dp else 12.dp)) {
+                if (setupRestricted && !page.isDriving) {
                     DrivingHoldingScreen()
-                } else when (screen) {
-                    WireScreen.HOME, WireScreen.CREATE, WireScreen.INVITE,
-                    WireScreen.WAITING, WireScreen.MISSION, WireScreen.MUSIC_PICK,
-                    WireScreen.FIRST_SONG, WireScreen.SUMMARY ->
-                        if (designWide) DesignedJourney(s, screen, enabled) else when (screen) {
-                            WireScreen.HOME -> WireHome(s, contentWide, enabled)
-                            WireScreen.CREATE -> WireCreate(s, contentWide, enabled)
-                            WireScreen.INVITE -> WireInvite(s, enabled)
-                            WireScreen.WAITING -> WireWaiting(s, contentWide, enabled)
-                            WireScreen.MISSION -> WireMission(s, contentWide, enabled)
-                            WireScreen.MUSIC_PICK -> WireMusicPick(s, contentWide, enabled)
-                            WireScreen.FIRST_SONG -> WireFirstSong(s, contentWide, enabled)
-                            else -> WireEnding(s, screen, contentWide, enabled)
-                        }
-                    WireScreen.ARRIVED, WireScreen.SAVE -> WireEnding(s, screen, contentWide, enabled)
-                    else -> WireDriving(s, screen, contentWide, enabled, voice,
+                } else when {
+                    page.isPreDrive -> FigmaJourneyExact(s, page, enabled && page == s.screen)
+                    page == WireScreen.SUMMARY -> if (designWide)
+                        DesignedJourney(s, page, enabled) else WireEnding(s, page, contentWide, enabled)
+                    page == WireScreen.ARRIVED || page == WireScreen.SAVE ->
+                        WireEnding(s, page, contentWide, enabled)
+                    else -> WireDriving(s, page, contentWide, enabled, voice,
                         designWide = designWide, setupRestricted = setupRestricted,
                         onResetDemo = {
                             voice.audio.stopPlayback()
@@ -350,7 +493,7 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
                             s.message = "출발 지점으로 돌아갔어요."
                             s.drive()
                         }, onPollSpeech = {
-                        if (designWide) playDemoPollSpeech()
+                        if (!convoy.useRealCar) playDemoPollSpeech()
                         else if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
                             PackageManager.PERMISSION_GRANTED) startPollSpeech()
                         else if (setupRestricted) {
@@ -363,9 +506,10 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
                     })
                 }
             }
+            }
         }
     }
-    if (s.showVoiceMenu && !wide) AlertDialog(onDismissRequest = { s.showVoiceMenu = false },
+    if (s.showVoiceMenu && !wide && !screen.isDriving) AlertDialog(onDismissRequest = { s.showVoiceMenu = false },
         title = { Text("모두에게 말하기") },
         text = { Text("말로 투표 안건을 만들거나 길에 원본 음성을 남길 수 있어요.") },
         dismissButton = { TextButton(onClick = { s.showVoiceMenu = false }) { Text("취소") } },
@@ -411,8 +555,8 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
                 }
         }
     }
-    if (s.showSettings && wide && !setupRestricted) DesignedSettingsDialog(s)
-    else if (s.showSettings && !setupRestricted) AlertDialog(onDismissRequest = { s.showSettings = false },
+    if (s.showSettings && !screen.isDriving && wide && !setupRestricted) DesignedSettingsDialog(s)
+    else if (s.showSettings && !screen.isDriving && !setupRestricted) AlertDialog(onDismissRequest = { s.showSettings = false },
         title = { Text("설정") }, text = {
             Column {
                 Text("현재는 한 기기 시연입니다. 원본 음성 녹음·재생은 이 기기에서 작동하지만 차량 간 음성 연결·음악은 아직 전송되지 않습니다.")
@@ -420,8 +564,8 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
                 TextButton(onClick = { s.simulateIncomingCall("문준 차") }) { Text("문준 차 전화 수신 시연") }
             }
         }, confirmButton = { TextButton(onClick = { s.showSettings = false }) { Text("닫기") } })
-    if (s.showEnd && wide && !setupRestricted) DesignedEndDialog(s)
-    else if (s.showEnd && !setupRestricted) AlertDialog(onDismissRequest = { s.showEnd = false },
+    if (s.showEnd && !screen.isDriving && wide && !setupRestricted) DesignedEndDialog(s)
+    else if (s.showEnd && !screen.isDriving && !setupRestricted) AlertDialog(onDismissRequest = { s.showEnd = false },
         title = { Text("동행을 종료할까요?") },
         text = { Text("시연 여행을 마치고 도착 화면으로 이동합니다.") },
         dismissButton = { TextButton(onClick = { s.showEnd = false }) { Text("계속 가기") } },
@@ -429,8 +573,8 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
             s.showEnd = false
             s.open(WireScreen.ARRIVED)
         }) { Text("동행 종료") } })
-    if (s.showHistory && wide && !setupRestricted) DesignedHistoryDialog(s, voice)
-    else if (s.showHistory && !setupRestricted) AlertDialog(onDismissRequest = { s.showHistory = false },
+    if (s.showHistory && !screen.isDriving && wide && !setupRestricted) DesignedHistoryDialog(s, voice)
+    else if (s.showHistory && !screen.isDriving && !setupRestricted) AlertDialog(onDismissRequest = { s.showHistory = false },
         title = { Text("이전 대화") },
         text = { Text("다연 차 · 휴게소 들렀다 가자\n문준 차 · 이 노래 누가 신청했어? 좋다") },
         dismissButton = {

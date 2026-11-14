@@ -1,6 +1,6 @@
 {
   "figmaFile": "c3q0MskWTtRP5gE9WspRVo",
-  "figmaNode": "349:15776",
+  "figmaNode": "443:19285",
   "file": "LinkCarFigmaHome.kt",
   "width": 1700,
   "height": 1184,
@@ -11,5 +11,6 @@
     "#F3F4F8",
     "#EBEDF2",
     "#D5D7DD"
-  ]
+  ],
+  "renderer": "LinkCarFigmaJourneyExact.kt"
 }

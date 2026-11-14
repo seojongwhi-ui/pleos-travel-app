@@ -4,6 +4,7 @@ import androidx.compose.runtime.*
 import kotlin.random.Random
 
 internal val LocalTripLive = staticCompositionLocalOf { LiveTripState() }
+internal val LocalVehicleMotion = staticCompositionLocalOf { VehicleMotionState() }
 internal val LocalTripActions = staticCompositionLocalOf { TripActions() }
 internal val LocalConvoy = staticCompositionLocalOf<ConvoyController> { error("Convoy state is not provided") }
 

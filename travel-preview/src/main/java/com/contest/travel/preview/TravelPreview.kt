@@ -26,7 +26,7 @@ internal fun TravelPreview(drivingUx: DrivingUxState, liveTrip: LiveTripState,
         val convoy = rememberConvoyController(motion)
         val context = LocalContext.current
         CompositionLocalProvider(LocalTripLive provides liveTrip, LocalTripActions provides actions,
-            LocalConvoy provides convoy) {
+            LocalConvoy provides convoy, LocalVehicleMotion provides motion) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val wide = maxWidth >= 1100.dp

@@ -147,8 +147,8 @@ internal class MapLibreRoadMapBridge(private val context: Context) {
         "voice" -> LinkCarMapArtwork.voice(context, voiceDistance())
         else -> {
             val index = id.last().digitToInt()
-            val portraits = listOf(R.drawable.flow_imgprofilephoto,
-                R.drawable.flow_imgprofilephoto2, R.drawable.flow_imgprofilephoto1)
+            val portraits = listOf(R.drawable.driving_07296,
+                R.drawable.driving_cd7ef, R.drawable.driving_1491e)
             LinkCarMapArtwork.car(context, index == 0, portraits[index], labels[index])
         }
     }

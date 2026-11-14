@@ -2,6 +2,7 @@ package com.contest.travel.preview
 
 import android.car.Car
 import android.car.VehiclePropertyIds
+import android.car.VehicleGear
 import android.car.hardware.CarPropertyValue
 import android.car.hardware.property.CarPropertyManager
 import android.content.Context
@@ -12,8 +13,18 @@ import android.os.SystemClock
 internal data class VehicleMotionState(
     val meters: Double = 0.0,
     val speedKph: Float = 0f,
-    val error: String? = null
-)
+    val error: String? = null,
+    val sampleId: Long = 0,
+    val sampleTimeMillis: Long = 0,
+    val speedMetersPerSecond: Float = 0f,
+    val gear: Int? = null
+) {
+    val inDrive get() = gear == VehicleGear.GEAR_DRIVE
+    val gearLabel get() = when (gear) {
+        VehicleGear.GEAR_PARK -> "P"; VehicleGear.GEAR_REVERSE -> "R"
+        VehicleGear.GEAR_NEUTRAL -> "N"; VehicleGear.GEAR_DRIVE -> "D"; else -> "—"
+    }
+}
 
 /** Integrates the same vehicle speed property that Pleos uses for the cluster. */
 internal class VehicleMotionObserver(
@@ -31,9 +42,20 @@ internal class VehicleMotionObserver(
 
     private val listener = object : CarPropertyManager.CarPropertyEventCallback {
         override fun onChangeEvent(value: CarPropertyValue<*>) {
-            if (value.propertyId != VehiclePropertyIds.PERF_VEHICLE_SPEED) return
-            val speed = (value.value as? Number)?.toFloat() ?: return
-            handler.post { if (active) sample(speed) }
+            if (value.status != CarPropertyValue.STATUS_AVAILABLE) {
+                onErrorEvent(value.propertyId, value.areaId)
+                return
+            }
+            when (value.propertyId) {
+                VehiclePropertyIds.PERF_VEHICLE_SPEED -> {
+                    val speed = (value.value as? Number)?.toFloat() ?: return
+                    handler.post { if (active) sample(speed) }
+                }
+                VehiclePropertyIds.GEAR_SELECTION -> {
+                    val gear = (value.value as? Number)?.toInt() ?: return
+                    handler.post { if (active) { state = state.copy(gear = gear); onState(state) } }
+                }
+            }
         }
 
         override fun onErrorEvent(propertyId: Int, areaId: Int) {
@@ -41,6 +63,8 @@ internal class VehicleMotionObserver(
                 handler.post {
                     if (active) publish(error = "차량 속도를 읽을 수 없어요. Virtual Console 연결을 확인해 주세요.")
                 }
+            } else if (propertyId == VehiclePropertyIds.GEAR_SELECTION) {
+                handler.post { if (active) { state = state.copy(gear = null); onState(state) } }
             }
         }
     }
@@ -69,6 +93,12 @@ internal class VehicleMotionObserver(
                         "차량 속도 업데이트를 등록하지 못했어요."
                     }
                     sample(service.getFloatProperty(VehiclePropertyIds.PERF_VEHICLE_SPEED, 0))
+                    // Failure to read gear must not fabricate D or break the existing speed/distance feed.
+                    runCatching {
+                        check(service.registerCallback(listener, VehiclePropertyIds.GEAR_SELECTION, 0f))
+                        state = state.copy(gear = service.getIntProperty(VehiclePropertyIds.GEAR_SELECTION, 0))
+                    }.onFailure { state = state.copy(gear = null) }
+                    onState(state)
                 } catch (error: Exception) {
                     publish(error = "차량 속도 조회 실패: ${error.message ?: error.javaClass.simpleName}")
                 }
@@ -93,7 +123,8 @@ internal class VehicleMotionObserver(
         lastSampleMs = now
         lastSpeedMps = forwardSpeed
         state = state.copy(meters = state.meters + gained,
-            speedKph = forwardSpeed * 3.6f, error = null)
+            speedKph = forwardSpeed * 3.6f, error = null,
+            sampleId = state.sampleId + 1, sampleTimeMillis = now, speedMetersPerSecond = speedMps)
         onState(state)
     }
 

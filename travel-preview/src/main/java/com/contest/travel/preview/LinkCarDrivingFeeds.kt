@@ -32,34 +32,19 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun DFeedContent(s: WireSession, feed: DFeed, compact: Boolean, map: Boolean,
+internal fun DFeedContent(s: WireSession, feed: DFeed, compact: Boolean, height: Float,
     enabled: Boolean, setupRestricted: Boolean, voice: LinkCarVoiceRuntime,
     onVoiceClick: () -> Unit, onPollSpeech: () -> Unit) {
     if (feed == DFeed.HISTORY) { DHistory(s, enabled && !setupRestricted, voice); return }
-    DText("음성 연결", 49, 34, DType.Eyebrow, DrivingFigma.Muted)
-    if (!compact && (s.pollDemoVisible || feed in setOf(DFeed.MENU, DFeed.UNAVAILABLE, DFeed.RECEIVED,
-            DFeed.ROAD_NEAR, DFeed.ROAD_DELIVER, DFeed.RECORDING, DFeed.CALL_DECLINED)))
-        DDrivingBack(s, enabled)
     if (compact) {
-        val y = if (map) 84 else 106
-        DVoiceHeader(40, y, avatar = drivingCompanionImage(s, "다연 차", "imgAvatar", R.drawable.driving_55f82))
-        val poll = s.generatedPoll
-        DText(poll?.let { androidx.compose.ui.text.AnnotatedString(it.title) }
-            ?: dAccent("우리 ", "휴게소", " 들렀다 가자!"), 48, y + 82, DType.CompactHeadline,
-            w = if (poll != null) 464 else null, lines = if (poll != null) 2 else 1)
-        if (poll != null) poll.options.forEachIndexed { i, option ->
-            DButton(option, 544 + (i % 2) * 226, y - 10 + (i / 2) * 80,
-                218, 72, enabled = enabled, type = DType.Eyebrow,
-                color = if (s.vote == option) DrivingFigma.Blue else DrivingFigma.Black) {
-                s.designPreviewNode = null; s.vote = option
-            }
-        } else {
-            DButton("좋아!", 544, y + 10, 230, enabled = enabled) { s.respondToProposal(true) }
-            DButton("다음에", 790, y + 10, 200, enabled = enabled,
-                color = DrivingFigma.Input, ink = DrivingFigma.Disabled) { s.respondToProposal(false) }
-        }
+        DCompactFeedContent(s, feed, height, enabled && !setupRestricted, voice,
+            onVoiceClick, onPollSpeech)
         return
     }
+    DText("음성 연결", 49, 34, DType.Eyebrow, DrivingFigma.Muted)
+    if (s.pollDemoVisible || feed in setOf(DFeed.MENU, DFeed.UNAVAILABLE, DFeed.RECEIVED,
+            DFeed.ROAD_NEAR, DFeed.ROAD_DELIVER, DFeed.RECORDING, DFeed.CALL_DECLINED))
+        DDrivingBack(s, enabled)
     fun leavePreview() { s.designPreviewNode = null }
     val historyEnabled = enabled && !setupRestricted
     if (feed in setOf(DFeed.IDLE, DFeed.MESSAGE, DFeed.LISTENING, DFeed.MENU, DFeed.ROAD_NEAR))
@@ -262,6 +247,129 @@ internal fun DFeedContent(s: WireSession, feed: DFeed, compact: Boolean, map: Bo
                 DrivingFigma.Hint, 942, TextAlign.Center)
         }
         else -> Unit
+    }
+}
+
+/** A resized panel keeps the active conversation; resizing never creates a proposal. */
+@Composable
+private fun DCompactFeedContent(s: WireSession, feed: DFeed, height: Float, enabled: Boolean,
+    voice: LinkCarVoiceRuntime, onVoiceClick: () -> Unit, onPollSpeech: () -> Unit) {
+    val actionY = height - 88f
+    DText("음성 연결", 48, 20, DType.Eyebrow, DrivingFigma.Muted)
+    when (feed) {
+        DFeed.IDLE -> {
+            DText("친구 차를 두드려보세요", 48, 107, DType.CompactHeadline,
+                DrivingFigma.Hint, 580)
+            DButton("모두에게 말하기", 650, actionY, 344, 72, enabled = enabled,
+                type = DType.Meta, onClick = onVoiceClick)
+        }
+        DFeed.MESSAGE, DFeed.ROAD_NEAR -> {
+            val person = if (feed == DFeed.ROAD_NEAR) "문준 차 · 3분 전" else "다연 차 방금"
+            DText(person, 48, 76, DType.Meta, DrivingFigma.Subtle)
+            DText(dAccent("이 ", "노래", " 누가 신청했어? 좋다"), 48, 111,
+                DType.Description, w = 570, lines = 2)
+            DButton("모두에게 말하기", 650, actionY, 344, 72, enabled = enabled,
+                type = DType.Meta, onClick = onVoiceClick)
+        }
+        DFeed.PROPOSAL -> {
+            DText("투표 제안", 48, 76, DType.Meta, DrivingFigma.Subtle)
+            DText(s.generatedPoll?.title ?: "우리 휴게소 들렀다 가자!", 48, 111,
+                DType.Description, w = 520, lines = 2)
+            val options = s.generatedPoll?.options
+            if (options.isNullOrEmpty()) {
+                DButton("좋아!", 600, actionY, 185, 72, enabled = enabled,
+                    type = DType.Meta) { s.respondToProposal(true) }
+                DButton("다음에", 799, actionY, 195, 72, enabled = enabled,
+                    color = DrivingFigma.Input, ink = DrivingFigma.Disabled,
+                    type = DType.Meta) { s.respondToProposal(false) }
+            } else {
+                options.take(4).forEachIndexed { i, option ->
+                    DButton(option, 560 + (i % 2) * 220,
+                        actionY - if (options.size > 2 && i < 2) 68 else 0,
+                        206, 60, enabled = enabled, type = DType.Meta,
+                        color = if (s.vote == option) DrivingFigma.Blue else DrivingFigma.Black) {
+                        s.vote = option
+                    }
+                }
+            }
+        }
+        DFeed.ROAD_DELIVER -> {
+            DText("다연 차가 길에 남긴 음성 · 12분 전", 48, 76,
+                DType.Meta, DrivingFigma.Subtle)
+            DText(dAccent("\"마지막에 오는 사람 여기 들러서 ", "음료수", " 좀 사오기~\""),
+                48, 111, DType.Description, w = 570, lines = 2)
+            DChip("GU 편의점 청평점", 650, 100, 344, 44)
+            DButton("그냥 갈게요", 650, actionY, 160, 72, enabled = enabled,
+                color = DrivingFigma.Input, ink = DrivingFigma.Disabled,
+                type = DType.Meta) { s.roadVoiceShown = false; s.drive() }
+            DButton("들렀다 갈게요", 824, actionY, 170, 72, enabled = enabled,
+                type = DType.Meta) {
+                s.waypoint = true; s.roadVoiceShown = false; s.open(WireScreen.MAP)
+            }
+        }
+        DFeed.LISTENING -> {
+            DText("듣는 중", 48, 76, DType.Meta, DrivingFigma.Subtle)
+            val transcript = if (s.pollBusy) "AI가 투표 안건을 만들고 있어요"
+                else if (s.message.startsWith("인식: ")) s.message.removePrefix("인식: ")
+                else voice.status
+            DText(transcript, 48, 111, DType.Description, w = 570, lines = 2)
+            DButton("입력 종료", 650, actionY, 344, 72, enabled = enabled,
+                type = DType.Meta) {
+                voice.stopListening(); s.pollDemoVisible = false
+                s.pollDemoSpeaking = false; s.speechFeedbackVisible = false
+            }
+        }
+        DFeed.MENU -> {
+            DText("어떤 방식으로 말할까요?", 48, 106, DType.Description, w = 520)
+            DButton("투표 안건 말하기", 560, actionY, 210, 72, enabled = enabled,
+                type = DType.Meta) { s.showVoiceMenu = false; onPollSpeech() }
+            DButton("길에 음성 남기기", 784, actionY, 210, 72, enabled = enabled,
+                type = DType.Meta) { s.showVoiceMenu = false; s.showVoiceRecorder = true }
+        }
+        DFeed.SENT -> {
+            DText("${s.knockTarget}를 노크했어요 · ${s.seconds}초", 48, 111,
+                DType.Description, w = 570, lines = 2)
+            DButton("노크 취소", 650, actionY, 160, 72, enabled = enabled,
+                color = DrivingFigma.Input, ink = DrivingFigma.Disabled,
+                type = DType.Meta) { s.drive() }
+            DButton("응답 시연", 824, actionY, 170, 72, enabled = enabled,
+                type = DType.Meta) { s.acceptPendingDemoKnock() }
+        }
+        DFeed.INCOMING -> {
+            DText("${s.incomingCaller}가 노크했어요", 48, 111,
+                DType.Description, w = 570)
+            DButton("지금은 어려워요", 650, actionY, 160, 72, enabled = enabled,
+                color = DrivingFigma.Input, ink = DrivingFigma.Disabled,
+                type = DType.Meta) { s.drive() }
+            DButton("문 열고 대화하기", 824, actionY, 170, 72, enabled = enabled,
+                type = DType.Meta) { s.knockTarget = s.incomingCaller; s.startKnockCall() }
+        }
+        DFeed.CALL -> {
+            DText("${s.incomingCaller}와 대화 중 · ${s.seconds}초 남음", 48, 111,
+                DType.Description, w = 570)
+            DButton("대화 끝내기", 650, actionY, 344, 72, enabled = enabled,
+                type = DType.Meta) { s.drive() }
+        }
+        DFeed.RECEIVED -> {
+            DText("휴게소에서 커피 사 갈게, 뭐 마실래?", 48, 111,
+                DType.Description, w = 570, lines = 2)
+            DButton("목소리로 듣기", 650, actionY, 344, 72, enabled = enabled,
+                type = DType.Meta) { DPlayNote(s, voice) }
+        }
+        DFeed.UNAVAILABLE -> {
+            DText("${s.knockTarget}가 지금은 문을 못 열어요", 48, 111,
+                DType.Description, w = 570, lines = 2)
+            DButton("음성 메시지 남기기", 650, actionY, 344, 72, enabled = enabled,
+                type = DType.Meta) { s.showVoiceRecorder = true }
+        }
+        DFeed.RECORDING -> {
+            DText("길에 음성 남기는 중", 48, 111, DType.Description, w = 570)
+            DButton("완료", 650, actionY, 344, 72, enabled = enabled,
+                type = DType.Meta) { s.showVoiceRecorder = false }
+        }
+        DFeed.CALL_DECLINED -> DText("${s.incomingCaller}의 전화를 거절했어요", 48, 111,
+            DType.Description, w = 900)
+        DFeed.HISTORY -> Unit
     }
 }
 

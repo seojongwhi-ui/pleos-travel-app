@@ -202,7 +202,7 @@ internal fun DVoiceHeader(x: Number, y: Number, who: String = "다연 차 방금
 
 internal enum class DFeed { IDLE, MESSAGE, MENU, LISTENING, PROPOSAL, SENT, INCOMING,
     CALL, UNAVAILABLE, RECEIVED, ROAD_NEAR, ROAD_DELIVER, HISTORY, RECORDING, CALL_DECLINED }
-internal data class DCommunicationKey(val feed: DFeed, val compact: Boolean, val map: Boolean, val source: String)
+internal data class DCommunicationKey(val feed: DFeed, val source: String)
 
 internal val LocalDrivingAssets = staticCompositionLocalOf { drivingFigmaAssets.getValue("443:21058") }
 @Composable internal fun drivingAsset(key: String, fallback: Int): Int = LocalDrivingAssets.current[key] ?: fallback
@@ -281,14 +281,16 @@ internal fun ColumnScope.FigmaDriving(s: WireSession, screen: WireScreen, enable
                 DHeader(s, enabled && !setupRestricted)
                 DRoute(s, screen, mapHeight, enabled, voice, onResetDemo)
                 DPanel(24, bodyY, 1022, bodyH) {
-                    val communication = DCommunicationKey(feed, compact, mapHeight >= 280f, drivingFigmaNode(s, screen))
+                    val feedSource = if (s.designPreviewNode == null) drivingFigmaNode(s, WireScreen.DRIVE)
+                        else drivingFigmaNode(s, screen)
+                    val communication = DCommunicationKey(feed, feedSource)
                     AnimatedContent(targetState = communication,
                         transitionSpec = { fadeIn(tween(220)).togetherWith(fadeOut(tween(140))) },
-                        label = "drivingCommunication") { (target, small, wasMap, source) ->
+                        label = "drivingCommunication") { (target, source) ->
                         CompositionLocalProvider(LocalDrivingAssets provides drivingFigmaAssets.getValue(source)) {
                         Box(Modifier.requiredSize(1022.dp, bodyH.dp)) {
-                            DFeedContent(s, target, small, wasMap,
-                                enabled && communication == DCommunicationKey(target, small, wasMap, source),
+                            DFeedContent(s, target, compact, bodyH,
+                                enabled && communication == DCommunicationKey(target, source),
                                 setupRestricted, voice, onVoiceClick, onPollSpeech)
                         }
                         }

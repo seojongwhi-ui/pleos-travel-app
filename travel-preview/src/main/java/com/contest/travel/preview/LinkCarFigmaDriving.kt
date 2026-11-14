@@ -242,8 +242,8 @@ internal fun drivingFeed(s: WireSession, screen: WireScreen): DFeed = when {
     screen == WireScreen.CALL_DECLINED -> DFeed.CALL_DECLINED
     screen == WireScreen.VOICE_LEAVE -> DFeed.UNAVAILABLE
     screen == WireScreen.VOICE_RECEIVED -> DFeed.RECEIVED
-    screen == WireScreen.VOICE_APPROACH -> DFeed.ROAD_NEAR
     screen == WireScreen.VOICE_DELIVER || s.roadVoiceShown -> DFeed.ROAD_DELIVER
+    screen == WireScreen.VOICE_APPROACH -> DFeed.ROAD_NEAR
     s.speechFeedbackVisible || s.pollBusy || s.pollDemoVisible -> DFeed.LISTENING
     s.proposalVisible || s.generatedPoll != null -> DFeed.PROPOSAL
     s.drivingIdle -> DFeed.IDLE

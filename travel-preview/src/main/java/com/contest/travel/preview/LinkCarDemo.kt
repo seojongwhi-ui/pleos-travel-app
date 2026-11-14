@@ -463,8 +463,10 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
         s.progress = demoVisualProgress(convoy.distanceMeters)
         if (foreground && !s.demoVoiceTriggered && voice.notes.hasDemoMarker &&
             convoy.distanceMeters >= 200.0 && !voice.audio.isPlaying) {
-            if (voice.playDemoMarker { s.roadVoiceShown = true }) {
+            if (voice.playDemoMarker {}) {
                 s.demoVoiceTriggered = true
+                s.roadVoiceShown = true
+                if (screen == WireScreen.MAP || screen == WireScreen.DJ) s.drive()
             }
         }
     }

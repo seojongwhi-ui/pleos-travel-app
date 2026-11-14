@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.dp
 internal fun ColumnScope.WireDriving(s: WireSession, screen: WireScreen, wide: Boolean, enabled: Boolean,
     voice: LinkCarVoiceRuntime, designWide: Boolean, setupRestricted: Boolean,
     onVoiceClick: () -> Unit, onResetDemo: () -> Unit, onPollSpeech: () -> Unit) {
-    if (screen.isDriving && designWide) {
-        DesignedDriveScreen(s, screen, enabled, setupRestricted, voice, onVoiceClick,
+    if (screen.isDriving) {
+        FigmaDriving(s, screen, enabled, setupRestricted, voice, onVoiceClick,
             onResetDemo, onPollSpeech)
         return
     }

@@ -1,0 +1,22 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="45" height="56" viewBox="0 0 45 56" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="Frame 1707487232">
+<g id="Vector">
+<use xlink:href="#stroke0_0_45" fill="url(#paint0_linear_0_45)"/>
+<mask id="stroke1_0_45" fill="white">
+<use xlink:href="#stroke0_0_45"/>
+</mask>
+<path d="M20.8688 55.4683C21.3469 55.8041 21.9375 56 22.5 56C23.0625 56 23.6531 55.8321 24.1312 55.4683C24.975 54.8526 45.0841 40.4398 44.9997 22.3888C44.9997 10.047 34.903 0 22.5 0C10.097 0 0.000264764 10.047 0.000264764 22.3888C-0.0841092 40.4398 20.025 54.8526 20.8688 55.4683Z" stroke-width="2" stroke="#DBDBDB" mask="url(#stroke1_0_45)"/>
+</g>
+<g id="icon">
+<path id="Vector_2" d="M23 13C24.6569 13 26 14.3431 26 16V22C26 23.6569 24.6569 25 23 25C21.3431 25 20 23.6569 20 22V16C20 14.3431 21.3431 13 23 13Z" stroke-width="2" stroke="white"/>
+<path id="Vector_3" d="M16 22C16 23.8565 16.7375 25.637 18.0503 26.9497C19.363 28.2625 21.1435 29 23 29M23 29C24.8565 29 26.637 28.2625 27.9497 26.9497C29.2625 25.637 30 23.8565 30 22M23 29V33" stroke-width="2" stroke-linecap="round" stroke="white"/>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_45" x1="22.5" y1="0" x2="22.5" y2="56" gradientUnits="userSpaceOnUse">
+<stop stop-color="#5263E7"/>
+<stop offset="1" stop-color="#96A2FF"/>
+</linearGradient>
+<path id="stroke0_0_45" d="M20.8688 55.4683C21.3469 55.8041 21.9375 56 22.5 56C23.0625 56 23.6531 55.8321 24.1312 55.4683C24.975 54.8526 45.0841 40.4398 44.9997 22.3888C44.9997 10.047 34.903 0 22.5 0C10.097 0 0.000264764 10.047 0.000264764 22.3888C-0.0841092 40.4398 20.025 54.8526 20.8688 55.4683Z"/>
+</defs>
+</svg>

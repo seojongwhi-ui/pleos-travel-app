@@ -11,6 +11,7 @@ const palette = new Set(spec.variables.flatMap(v => (v.values || []).map(m => m.
 // Figma 328:5199 is the user's approved visual source for the driving screen.
 // Its additional colors are allowed only in that screen, never project wide.
 const driveDesign = JSON.parse(fs.readFileSync(path.join(root, 'docs/design/linkcar-driving-figma.json'), 'utf8'));
+const driveFiles = [driveDesign.file, ...(driveDesign.additionalFiles || [])];
 const drivePalette = new Set(driveDesign.colors.map(v => v.slice(1).toUpperCase() + 'FF'));
 const homeDesign = JSON.parse(fs.readFileSync(path.join(root, 'docs/design/linkcar-home-figma.json'), 'utf8'));
 const homePalette = new Set(homeDesign.colors.map(v => v.slice(1).toUpperCase() + 'FF'));
@@ -42,13 +43,13 @@ for (const name of fs.readdirSync(dir).filter(f => f.endsWith('.kt'))) {
     const callTimerOnly = name === callDesign.file &&
         [...text.matchAll(/\bfontSize\s*=\s*(\d+)\.sp/g)].every(m => Number(m[1]) === callDesign.timerFontSize);
     if (name !== 'PleosDesign215.kt' && name !== homeDesign.file && name !== journeyDesign.file &&
-        name !== driveDesign.file && !callTimerOnly && /\bfontSize\s*=/.test(text)) {
+        !driveFiles.includes(name) && !callTimerOnly && /\bfontSize\s*=/.test(text)) {
         issues.push(`${name}: use MaterialTheme.typography instead of a screen-specific font size`);
     }
     for (const m of text.matchAll(/Color\(0x([\dA-F]{8})\)/gi)) {
         const argb = m[1].toUpperCase();
         const rgba = argb.slice(2) + argb.slice(0, 2);
-        if (!palette.has(rgba) && !([driveDesign.file, 'LinkCarDesignedJourney.kt',
+        if (!palette.has(rgba) && !([...driveFiles, 'LinkCarDesignedJourney.kt',
             'LinkCarDesignedDialogs.kt'].includes(name) && drivePalette.has(rgba)) &&
             !(name === 'LinkCarDesignedDialogs.kt' && rgba === dialogBackdropColor) &&
             !(name === homeDesign.file && homePalette.has(rgba)) &&

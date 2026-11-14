@@ -121,9 +121,9 @@ internal class MapLibreRoadMapBridge(private val context: Context) {
             }
         }
         val initial = route.points.first()
-        // At overview scale, the voice point is only a few pixels ahead.
-        // Keep the car portrait readable; the voice pin separates when zoomed.
-        val markers = listOf("destination", "voice", "car-0", "car-1", "car-2")
+        // Later symbol layers appear above earlier ones. Keep the destination
+        // visible even when a car arrives at the same point.
+        val markers = listOf("car-0", "car-1", "car-2", "voice", "destination")
         markers.forEach { id ->
             val source = GeoJsonSource("$id-point", point(initial))
             loadedStyle.addSource(source)

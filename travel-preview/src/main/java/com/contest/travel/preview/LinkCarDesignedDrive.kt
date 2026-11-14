@@ -71,6 +71,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import android.os.SystemClock
 import kotlin.math.PI
 import kotlin.math.abs
@@ -99,6 +101,8 @@ private object DriveDesign {
     val CallWave = Color(0xFF96A2FF)
     val CallMuted = Color(0xFF8F919F)
 }
+
+private val CallTimerFont = FontFamily(Font(R.font.outfit_regular, FontWeight.Normal))
 
 @Composable
 internal fun DesignedDriveScreen(s: WireSession, screen: WireScreen, enabled: Boolean,
@@ -930,17 +934,22 @@ private fun DesignedActiveCallCard(s: WireSession, enabled: Boolean, modifier: M
             Text("음성 연결", Modifier.offset(49.dp, 34.dp),
                 style = MaterialTheme.typography.labelMedium, color = DriveDesign.Muted)
             Canvas(Modifier.offset(72.dp, 150.dp).size(300.dp)) {
-                val stroke = 10.dp.toPx()
-                drawCircle(DriveDesign.CallTrack, style = Stroke(stroke))
+                val stroke = 18.dp.toPx()
+                val inset = stroke / 2f
+                drawCircle(DriveDesign.CallTrack, radius = size.minDimension / 2f - inset,
+                    style = Stroke(stroke))
                 drawArc(DriveDesign.Blue, -90f, 360f * (s.seconds.coerceIn(0, 30) / 30f),
-                    useCenter = false, style = Stroke(stroke, cap = StrokeCap.Round))
+                    useCenter = false, topLeft = Offset(inset, inset),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    style = Stroke(stroke, cap = StrokeCap.Butt))
             }
             Text("${s.seconds}", Modifier.offset(72.dp, 193.dp).width(300.dp),
-                style = TextStyle(fontFamily = MaterialTheme.typography.displayLarge.fontFamily,
+                style = TextStyle(fontFamily = CallTimerFont,
                     fontSize = 110.sp, fontWeight = FontWeight.Normal),
                 color = DriveDesign.Blue, textAlign = TextAlign.Center)
-            Text("초 남음", Modifier.offset(72.dp, 338.dp).width(300.dp),
-                style = MaterialTheme.typography.labelMedium,
+            Text("초 남음", Modifier.offset(72.dp, 340.dp).width(300.dp),
+                style = TextStyle(fontFamily = FFont, fontSize = 24.sp,
+                    fontWeight = FontWeight.SemiBold),
                 color = DriveDesign.CallMuted, textAlign = TextAlign.Center)
             Row(Modifier.offset(430.dp, 170.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1063,17 +1072,26 @@ private fun DesignedCompanionRow(name: String, state: String, score: Int, distan
             }
         }
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.size(220.dp).clip(CircleShape)
-            .background(if (inCall) DriveDesign.Blue else if (canKnock) DriveDesign.Black else DriveDesign.Input)
+        Box(Modifier.size(if (inCall) 240.dp else 220.dp)
+            .then(if (inCall) Modifier.border(6.dp, DriveDesign.BlueMid, CircleShape)
+                else Modifier.clip(CircleShape)
+                    .background(if (canKnock) DriveDesign.Black else DriveDesign.Input))
             .then(if (canKnock && !inCall) Modifier.clickable(enabled, onClick = onKnock)
                 .semantics { contentDescription = "$name 두드리기" } else Modifier),
             contentAlignment = Alignment.Center) {
             if (inCall) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("$callSeconds", style = MaterialTheme.typography.displayLarge,
-                        color = Color.White)
-                    Text("대화 중", style = MaterialTheme.typography.labelMedium,
-                        color = Color.White)
+                Box(Modifier.size(220.dp).clip(CircleShape).background(DriveDesign.Blue),
+                    contentAlignment = Alignment.Center) {
+                    Column(Modifier.offset(y = (-5).dp),
+                        horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("$callSeconds", style = TextStyle(fontFamily = CallTimerFont,
+                            fontSize = 64.sp, fontWeight = FontWeight.Normal),
+                            color = Color.White)
+                        Spacer(Modifier.height(4.dp))
+                        Text("대화 중", style = TextStyle(fontFamily = FFont,
+                            fontSize = 24.sp, fontWeight = FontWeight.Bold),
+                            color = Color.White)
+                    }
                 }
             } else if (canKnock) {
                 Image(painterResource(R.drawable.drive_knock_hand), null,

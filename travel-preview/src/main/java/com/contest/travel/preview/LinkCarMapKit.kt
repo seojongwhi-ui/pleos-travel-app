@@ -43,10 +43,11 @@ internal object LinkCarMapArtwork {
     private const val scale = 2
 
     fun car(context: Context, own: Boolean, portraitRes: Int, label: String): LinkCarMapImage {
-        val pinWidth = if (own) 148 else 96
-        val pinHeight = if (own) 173 else 121
-        val pinTip = if (own) 143 else 120
-        val photoTop = if (own) 32 else 9
+        val pinWidth = if (own) 118 else 76
+        val pinHeight = if (own) 138 else 96
+        val pinTip = if (own) 114 else 95
+        val photoTop = if (own) 26 else 7
+        val photoRadius = 30f
         val typeface = Typeface.create(context.resources.getFont(R.font.asta_sans), Typeface.BOLD)
         val textPaint = textPaint(typeface, 18f, if (own) Color.WHITE else LinkCarMapPalette.labelInk)
         val labelWidth = (textPaint.measureText(label) + 32f).toInt().coerceAtLeast(124)
@@ -61,14 +62,15 @@ internal object LinkCarMapArtwork {
             val portrait = BitmapFactory.decodeResource(context.resources, portraitRes)
             if (portrait != null) {
                 val cx = pinLeft + pinWidth / 2f
-                val cy = photoTop + 39f
-                val clip = Path().apply { addCircle(cx, cy, 39f, Path.Direction.CW) }
+                val cy = photoTop + photoRadius
+                val clip = Path().apply { addCircle(cx, cy, photoRadius, Path.Direction.CW) }
                 canvas.save()
                 canvas.clipPath(clip)
                 val edge = minOf(portrait.width, portrait.height)
                 val src = Rect((portrait.width - edge) / 2, (portrait.height - edge) / 2,
                     (portrait.width + edge) / 2, (portrait.height + edge) / 2)
-                canvas.drawBitmap(portrait, src, RectF(cx - 39f, cy - 39f, cx + 39f, cy + 39f),
+                canvas.drawBitmap(portrait, src, RectF(cx - photoRadius, cy - photoRadius,
+                    cx + photoRadius, cy + photoRadius),
                     Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
                 canvas.restore()
                 portrait.recycle()
@@ -113,11 +115,12 @@ internal object LinkCarMapArtwork {
         val typeface = Typeface.create(context.resources.getFont(R.font.asta_sans), Typeface.BOLD)
         val text = textPaint(typeface, 20f, Color.WHITE)
         val labelWidth = (text.measureText(label) + 68f).toInt().coerceAtLeast(170)
-        // The voice point is close to the own car. Keep the callout ahead of
-        // the pin so it does not cover the own car's portrait.
-        val pinLeft = 0f
-        val labelLeft = 45f + 8f
-        val width = labelWidth + 8 + 45
+        // Keep the microphone directly below the "남긴 음성" callout in the
+        // overview. The geographic anchor remains the demo point 200 m ahead.
+        val pinWidth = 36f
+        val labelLeft = pinWidth + 8f
+        val pinLeft = labelLeft + 45f + text.measureText("남긴 음성") / 2f - pinWidth / 2f
+        val width = labelWidth + labelLeft.toInt()
         val height = 52 + 10 + 56
         val bitmap = canvasBitmap(width, height) { canvas ->
             drawPill(canvas, labelLeft, 4f, labelWidth.toFloat(), 44f, LinkCarMapPalette.ink)
@@ -126,10 +129,10 @@ internal object LinkCarMapArtwork {
             canvas.drawText(label, labelLeft + 45f,
                 26f - (text.ascent() + text.descent()) / 2f, text)
             drawResource(context, canvas, R.drawable.mapkit_pin_voice,
-                RectF(pinLeft, 62f, pinLeft + 45f, 118f))
+                RectF(pinLeft, 73f, pinLeft + pinWidth, 118f))
         }
         return LinkCarMapImage(OverlayImage.fromBitmap(bitmap), bitmap, width, height,
-            PointF((pinLeft + 22.5f) / width, 1f))
+            PointF((pinWidth / 2f) / width, 1f))
     }
 
     private fun canvasBitmap(width: Int, height: Int, draw: (Canvas) -> Unit): Bitmap {

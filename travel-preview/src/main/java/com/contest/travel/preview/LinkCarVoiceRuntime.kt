@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.File
 import java.util.Locale
 
 internal data class GeneratedPoll(val title: String, val options: List<String>)
@@ -206,6 +207,25 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
         }.onSuccess {
             status = "다연 차가 길에 남긴 음성을 재생하고 있어요."
         }.onFailure { status = "길에 남긴 음성 재생 실패: ${it.message}" }.isSuccess
+    }
+
+    /** Bundled placeholder voice; replace the asset when the team's recording arrives. */
+    fun playDemoPollSpeech(onFinished: () -> Unit): Boolean {
+        return runCatching {
+            val file = File(context.cacheDir, "poll_agenda_demo.wav")
+            context.assets.open("poll_agenda_demo.wav").use { input ->
+                file.outputStream().use { output -> input.copyTo(output) }
+            }
+            audio.stopPlayback()
+            audio.play(file) {
+                status = "시연 투표 안건 음성 재생 완료"
+                onFinished()
+            }.getOrThrow()
+        }.onSuccess {
+            status = "시연 투표 안건 음성을 재생하고 있어요."
+        }.onFailure {
+            status = "시연 투표 음성 재생 실패: ${it.message ?: "음성 파일을 확인해 주세요."}"
+        }.isSuccess
     }
 
     fun play(note: RoadVoiceNote, car: String? = null) {

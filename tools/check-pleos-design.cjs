@@ -18,6 +18,8 @@ const callDesign = JSON.parse(fs.readFileSync(path.join(root, 'docs/design/linkc
 const callPalette = new Set(callDesign.colors.map(v => v.slice(1).toUpperCase() + 'FF'));
 const journeyDesign = JSON.parse(fs.readFileSync(path.join(root, 'docs/design/linkcar-journey-figma.json'), 'utf8'));
 const journeyPalette = new Set(journeyDesign.colors.map(v => v.slice(1).toUpperCase() + 'FF'));
+// Figma 328:8410 and 328:8645 use #0D0E12 at 45% for their dialog backdrops.
+const dialogBackdropColor = '0D0E12FF';
 // Music illustration gradients and small control surfaces are implementation
 // approximations, tracked separately from colors sampled from the Figma source.
 for (const color of journeyDesign.implementationColors || []) {
@@ -48,6 +50,7 @@ for (const name of fs.readdirSync(dir).filter(f => f.endsWith('.kt'))) {
         const rgba = argb.slice(2) + argb.slice(0, 2);
         if (!palette.has(rgba) && !([driveDesign.file, 'LinkCarDesignedJourney.kt',
             'LinkCarDesignedDialogs.kt'].includes(name) && drivePalette.has(rgba)) &&
+            !(name === 'LinkCarDesignedDialogs.kt' && rgba === dialogBackdropColor) &&
             !(name === homeDesign.file && homePalette.has(rgba)) &&
             !(name === journeyDesign.file && journeyPalette.has(rgba)) &&
             !(name === callDesign.file && callPalette.has(rgba))) {

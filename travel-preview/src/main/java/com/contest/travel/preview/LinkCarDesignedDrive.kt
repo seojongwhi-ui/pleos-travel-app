@@ -162,15 +162,10 @@ internal fun DesignedDriveScreen(s: WireSession, screen: WireScreen, enabled: Bo
                 onDrag = { delta ->
                     mapDragging = true
                     mapTarget = (mapTarget + delta / density).coerceIn(165f, 560f)
-                }, onRelease = { total ->
+                }, onRelease = { _ ->
                     mapDragging = false
-                    val expanded = if (screen == WireScreen.MAP) total >= -56f * density
-                        else total > 56f * density
-                    if (expanded && screen != WireScreen.MAP) {
-                        s.drive()
-                        s.open(WireScreen.MAP)
-                    } else if (!expanded && screen == WireScreen.MAP) s.drive()
-                    mapTarget = if (expanded) 560f else 165f
+                    // Resizing the map is a layout change, not a navigation event.
+                    mapTarget = if (mapTarget >= 280f) 560f else 165f
                 })
         }
         Spacer(Modifier.height(24.dp))
@@ -182,7 +177,7 @@ internal fun DesignedDriveScreen(s: WireSession, screen: WireScreen, enabled: Bo
                     s.message = "녹음 화면 시연을 마쳤어요. 음성 파일은 저장되지 않았어요."
                 }
             } else if (mapOpen) {
-                DesignedMapVoice(s, enabled, onVoiceClick, voiceModifier)
+                DesignedMapVoice(s, enabled, voiceModifier)
             } else if (musicOpen) {
                 DesignedCompactVoice(s, enabled, voice, onVoiceClick, voiceModifier)
             } else {
@@ -235,48 +230,35 @@ internal fun DesignedDriveScreen(s: WireSession, screen: WireScreen, enabled: Bo
 
 /** S-11 map cards. Keep the live NAVER map while matching the Figma card layout. */
 @Composable
-private fun DesignedMapVoice(s: WireSession, enabled: Boolean, onVoiceClick: () -> Unit,
-    modifier: Modifier) {
+private fun DesignedMapVoice(s: WireSession, enabled: Boolean, modifier: Modifier) {
     Surface(modifier, color = DriveDesign.Card, shape = RoundedCornerShape(48.dp)) {
         Box(Modifier.fillMaxSize().padding(26.dp)) {
             Text("음성 연결", Modifier.align(Alignment.TopStart),
                 style = TextStyle(fontFamily = FFont, fontSize = 23.sp,
                     color = DriveDesign.Muted))
             Column(Modifier.align(Alignment.CenterStart)) {
-                Row(Modifier.clip(RoundedCornerShape(36.dp)).background(Color.White)
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Image(painterResource(R.drawable.flow_imgprofilephoto2), null,
-                        Modifier.size(36.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-                    Spacer(Modifier.width(7.dp))
-                    Text("다연 차 방금", style = TextStyle(fontFamily = FFont,
-                        fontSize = 17.sp, color = DriveDesign.Subtle))
-                    Spacer(Modifier.width(8.dp))
-                    Image(painterResource(R.drawable.drive_voice_wave), null,
-                        Modifier.size(58.dp, 30.dp), contentScale = ContentScale.Fit)
-                    Spacer(Modifier.width(7.dp))
-                    Text("읽어 주는 중", style = TextStyle(fontFamily = FFont,
-                        fontSize = 17.sp, color = DriveDesign.Subtle))
-                }
-                Spacer(Modifier.height(14.dp))
-                Text(buildAnnotatedString {
-                    append("우리 ")
-                    withStyle(SpanStyle(color = DriveDesign.Blue)) { append("휴게소") }
-                    append(" 들렀다 가자!")
+                val poll = s.generatedPoll
+                Text(when {
+                    poll != null -> poll.title
+                    s.demoVoiceTriggered && !s.roadVoiceShown -> "다연 차가 길에 남긴 음성"
+                    else -> "아직 보낸 음성이 없어요"
                 }, style = TextStyle(fontFamily = FFont, fontSize = 37.sp,
                     fontWeight = FontWeight.Bold, color = DriveDesign.Ink))
+                if (poll == null) Text(
+                    if (s.demoVoiceTriggered && !s.roadVoiceShown) "길에 남긴 음성을 확인해 보세요"
+                    else "다른 친구의 차를 두드려보세요",
+                    style = TextStyle(fontFamily = FFont, fontSize = 17.sp,
+                        color = DriveDesign.Subtle))
             }
-            Row(Modifier.align(Alignment.CenterEnd),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                MapVoteButton("좋아!", true, enabled) {
-                    s.vote = "accepted"
-                    s.waypoint = true
+            s.generatedPoll?.let { poll ->
+                Row(Modifier.align(Alignment.CenterEnd),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    poll.options.forEachIndexed { index, option ->
+                        MapVoteButton(option, index == 0, enabled) { s.vote = option }
+                    }
                 }
-                MapVoteButton("다음에", false, enabled) { s.vote = "rejected" }
             }
-            // The Figma map card has no third button. The voice action remains in
-            // the driving card and the microphone control on that screen.
         }
     }
 }
@@ -295,18 +277,19 @@ private fun MapVoteButton(label: String, primary: Boolean, enabled: Boolean, onC
 
 @Composable
 private fun DesignedMapCompanions(s: WireSession, enabled: Boolean, modifier: Modifier) {
+    val convoy = LocalConvoy.current
     Surface(modifier, color = DriveDesign.Card, shape = RoundedCornerShape(48.dp)) {
         Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
             Text("연결된 차량 (2)", Modifier.padding(top = 18.dp, bottom = 2.dp),
                 style = TextStyle(fontFamily = FFont, fontSize = 23.sp,
                     color = DriveDesign.Muted))
-            MapCompanionRow("다연 차", 97,
-                remainingRouteKilometers(LocalConvoy.current.dayeonRouteMeters),
+            MapCompanionRow("다연 차", convoy.dayeonScore,
+                remainingRouteKilometers(convoy.dayeonRouteMeters),
                 R.drawable.flow_imgprofilephoto2, true, enabled,
                 Modifier.weight(1f)) { s.sendKnock("다연 차") }
             Box(Modifier.fillMaxWidth().height(1.dp).background(DriveDesign.Track.copy(alpha = .2f)))
-            MapCompanionRow("문준 차", 64,
-                remainingRouteKilometers(LocalConvoy.current.munjunRouteMeters),
+            MapCompanionRow("문준 차", convoy.munjunScore,
+                remainingRouteKilometers(convoy.munjunRouteMeters),
                 R.drawable.flow_imgprofilephoto1, true, enabled,
                 Modifier.weight(1f)) { s.sendKnock("문준 차") }
         }
@@ -316,6 +299,7 @@ private fun DesignedMapCompanions(s: WireSession, enabled: Boolean, modifier: Mo
 @Composable
 private fun MapCompanionRow(name: String, score: Int, distance: String, portrait: Int,
     canKnock: Boolean, enabled: Boolean, modifier: Modifier, onKnock: () -> Unit) {
+    val moving = LocalConvoy.current.speedKph > 0f
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(60.dp)) {
             Image(painterResource(portrait), name, Modifier.fillMaxSize().clip(CircleShape),
@@ -327,7 +311,7 @@ private fun MapCompanionRow(name: String, score: Int, distance: String, portrait
         Column(Modifier.width(118.dp)) {
             Text(name, style = TextStyle(fontFamily = FFont, fontSize = 25.sp,
                 fontWeight = FontWeight.SemiBold, color = DriveDesign.Ink))
-            Text(if (canKnock) "주행중" else "정차중",
+            Text(if (moving) "주행중" else "정차중",
                 style = TextStyle(fontFamily = FFont, fontSize = 16.sp,
                     color = if (canKnock) DriveDesign.Green else DriveDesign.Red))
         }
@@ -399,27 +383,10 @@ private fun DesignedCompactVoice(s: WireSession, enabled: Boolean,
                                 color = DriveDesign.Subtle)
                         }
                         else -> {
-                            Surface(color = Color.White, shape = CircleShape) {
-                                Row(Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Image(painterResource(R.drawable.drive_avatar), null,
-                                        Modifier.size(32.dp).clip(CircleShape),
-                                        contentScale = ContentScale.Crop)
-                                    Text("다연 차 방금 · 읽어 주는 중",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = DriveDesign.Subtle)
-                                }
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text(buildAnnotatedString {
-                                append("이 ")
-                                withStyle(SpanStyle(color = DriveDesign.Blue)) { append("노래") }
-                                append(" 누가 신청했어? 좋다")
-                            }, style = MaterialTheme.typography.headlineLarge,
+                            Text("아직 보낸 음성이 없어요", style = MaterialTheme.typography.headlineLarge,
                                 color = DriveDesign.Ink, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis)
-                            Text("제안이 오면 좋아 · 다음에 버튼이 함께 나타나요",
+                            Text("다른 친구의 차를 두드려보세요",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = DriveDesign.Muted, maxLines = 1)
                         }
@@ -446,12 +413,14 @@ private fun DesignedCompactVoice(s: WireSession, enabled: Boolean,
 
 @Composable
 private fun DesignedCompactCompanions(s: WireSession, enabled: Boolean, modifier: Modifier) {
+    val convoy = LocalConvoy.current
     Surface(modifier, color = DriveDesign.Card, shape = RoundedCornerShape(48.dp)) {
         Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
             Text("연결된 차량 (2)", Modifier.padding(top = 14.dp),
                 style = MaterialTheme.typography.labelMedium, color = DriveDesign.Muted)
-            listOf(Triple("다연 차", "97점 · 주행중", R.drawable.flow_imgprofilephoto2),
-                Triple("문준 차", "64점 · 주행중", R.drawable.flow_imgprofilephoto1)).forEachIndexed { _, (name, detail, portrait) ->
+            val motionLabel = if (convoy.speedKph > 0f) "주행중" else "정차중"
+            listOf(Triple("다연 차", "${convoy.dayeonScore}점 · $motionLabel", R.drawable.flow_imgprofilephoto2),
+                Triple("문준 차", "${convoy.munjunScore}점 · $motionLabel", R.drawable.flow_imgprofilephoto1)).forEachIndexed { _, (name, detail, portrait) ->
                 Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Image(painterResource(portrait), name, Modifier.size(64.dp).clip(CircleShape),
                         contentScale = ContentScale.Crop)
@@ -706,12 +675,22 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                 Text("이전 대화", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.labelSmall, color = DriveDesign.Subtle)
             }
+            if (screen in setOf(WireScreen.INCOMING_CALL, WireScreen.CALL_DECLINED,
+                    WireScreen.KNOCK_SENT, WireScreen.KNOCK_RECEIVED, WireScreen.KNOCK_FULL,
+                    WireScreen.VOICE_LEAVE, WireScreen.VOICE_RECEIVED,
+                    WireScreen.VOICE_APPROACH, WireScreen.VOICE_DELIVER) ||
+                (s.demoVoiceTriggered && !s.roadVoiceShown) || s.pollDemoVisible) {
+            val wavePulse by rememberInfiniteTransition(label = "투표 시연 음성 파형")
+                .animateFloat(initialValue = .72f, targetValue = 1.18f,
+                    animationSpec = infiniteRepeatable(tween(360), RepeatMode.Reverse),
+                    label = "음성 파형 높이")
             Surface(Modifier.align(Alignment.TopCenter).offset(y = 153.dp),
                 color = Color.White, shape = CircleShape) {
                 Row(Modifier.padding(start = 10.dp, end = 22.dp, top = 10.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Image(painterResource(when {
+                        s.pollDemoVisible -> R.drawable.flow_imgprofilephoto
                         screen in setOf(WireScreen.INCOMING_CALL, WireScreen.CALL_DECLINED) &&
                             s.incomingCaller == "문준 차" -> R.drawable.flow_imgprofilephoto1
                         screen == WireScreen.KNOCK_SENT && s.knockTarget == "문준 차" ->
@@ -722,16 +701,21 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                         else -> R.drawable.drive_avatar
                     }), null,
                         Modifier.size(48.dp).clip(CircleShape))
-                    Text("${if (screen in setOf(WireScreen.INCOMING_CALL, WireScreen.CALL,
+                    Text(if (s.pollDemoVisible) "본인" else "${if (screen in setOf(WireScreen.INCOMING_CALL, WireScreen.CALL,
                         WireScreen.CALL_DECLINED)) s.incomingCaller else if (screen == WireScreen.KNOCK_SENT)
                         s.knockTarget else "다연 차"} 방금",
                         style = MaterialTheme.typography.labelSmall,
                         color = DriveDesign.Subtle)
                     listOf(10, 20, 32, 20, 14, 26, 16, 10).forEach { height ->
-                        Box(Modifier.width(7.dp).height(height.dp).clip(CircleShape)
+                        Box(Modifier.width(7.dp)
+                            .height((height * if (s.pollDemoSpeaking) wavePulse else 1f).dp)
+                            .clip(CircleShape)
                             .background(DriveDesign.BlueMid))
                     }
                     Text(when (screen) {
+                        WireScreen.DRIVE -> if (s.pollDemoVisible) {
+                            if (s.pollDemoSpeaking) "말하는 중..." else "말하기 완료"
+                        } else "읽어 주는 중"
                         WireScreen.INCOMING_CALL -> "전화 수신 중"
                         WireScreen.KNOCK_SENT -> if (s.seconds > 0) "응답 기다리는 중" else "응답 없음"
                         WireScreen.CALL -> "대화 화면 · 시연"
@@ -741,11 +725,18 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                         color = DriveDesign.Subtle)
                 }
             }
+            }
             Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
                 .padding(horizontal = 32.dp).offset(y = 252.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 val poll = s.generatedPoll
-                if (screen == WireScreen.INCOMING_CALL) {
+                if (s.pollDemoVisible && screen == WireScreen.DRIVE) {
+                    Text("아 배고프다 휴게소 들리면 안되나\n나 밥 먹고 가고 싶은데",
+                        style = TextStyle(fontFamily = FFont, fontSize = 54.sp,
+                            lineHeight = 66.sp, fontWeight = FontWeight.Bold,
+                            color = DriveDesign.Blue),
+                        textAlign = TextAlign.Center)
+                } else if (screen == WireScreen.INCOMING_CALL) {
                     Text("${s.incomingCaller}에서 전화가 왔어요",
                         style = MaterialTheme.typography.displayLarge,
                         color = DriveDesign.Ink, textAlign = TextAlign.Center)
@@ -796,13 +787,10 @@ private fun DesignedVoiceCard(s: WireSession, screen: WireScreen, enabled: Boole
                         style = MaterialTheme.typography.labelMedium, color = DriveDesign.Subtle,
                         textAlign = TextAlign.Center)
                 } else if (poll == null) {
-                    Text(buildAnnotatedString {
-                        append("이 ")
-                        withStyle(SpanStyle(color = DriveDesign.Blue)) { append("노래") }
-                        append(" 누가 신청했어? 좋다")
-                    }, style = MaterialTheme.typography.displayLarge, color = DriveDesign.Ink,
+                    Text("아직 보낸 음성이 없어요",
+                        style = MaterialTheme.typography.displayLarge, color = DriveDesign.Ink,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-                    Text("제안이 오면 좋아 · 다음에 버튼이 함께 나타나요",
+                    Text("다른 친구의 차를 두드려보세요",
                         style = MaterialTheme.typography.labelSmall, color = DriveDesign.Muted,
                         textAlign = TextAlign.Center)
                 } else {
@@ -999,6 +987,8 @@ private fun DesignedActiveCallCard(s: WireSession, enabled: Boolean, modifier: M
 
 @Composable
 private fun DesignedCompanions(s: WireSession, screen: WireScreen, enabled: Boolean, modifier: Modifier) {
+    val convoy = LocalConvoy.current
+    val motionLabel = if (convoy.speedKph > 0f) "시연 주행" else "시연 정차"
     Surface(modifier, color = DriveDesign.Card, shape = RoundedCornerShape(56.dp)) {
         Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
             Row(Modifier.fillMaxWidth().height(90.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1009,8 +999,8 @@ private fun DesignedCompanions(s: WireSession, screen: WireScreen, enabled: Bool
                         Modifier.size(56.dp), contentScale = ContentScale.Crop)
                 }
             }
-            DesignedCompanionRow("다연 차", "시연 주행 · 60 km/h", 97,
-                remainingRouteKilometers(LocalConvoy.current.dayeonRouteMeters),
+            DesignedCompanionRow("다연 차", "$motionLabel · ${(convoy.speedKph * .60f).toInt()} km/h", convoy.dayeonScore,
+                remainingRouteKilometers(convoy.dayeonRouteMeters),
                 R.drawable.flow_imgprofilephoto2, R.drawable.drive_status_green,
                 enabled, true, screen == WireScreen.CALL && s.incomingCaller == "다연 차",
                 s.seconds, Modifier.weight(1f)) {
@@ -1018,8 +1008,8 @@ private fun DesignedCompanions(s: WireSession, screen: WireScreen, enabled: Bool
             }
             Image(painterResource(R.drawable.drive_card_divider), null,
                 Modifier.fillMaxWidth().height(2.dp), contentScale = ContentScale.FillBounds)
-            DesignedCompanionRow("문준 차", "시연 주행 · 40 km/h", 64,
-                remainingRouteKilometers(LocalConvoy.current.munjunRouteMeters),
+            DesignedCompanionRow("문준 차", "$motionLabel · ${(convoy.speedKph * .40f).toInt()} km/h", convoy.munjunScore,
+                remainingRouteKilometers(convoy.munjunRouteMeters),
                 R.drawable.flow_imgprofilephoto1, R.drawable.drive_status_green,
                 enabled, true, screen == WireScreen.CALL && s.incomingCaller == "문준 차",
                 s.seconds, Modifier.weight(1f)) { s.sendKnock("문준 차") }

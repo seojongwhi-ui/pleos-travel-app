@@ -1,37 +1,78 @@
 package com.contest.travel.preview
 
+import android.graphics.drawable.ColorDrawable
+import android.view.WindowManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 
 private val dialogInk = Color(0xFF191A1B)
 private val dialogSub = Color(0xFFA4A8AE)
 private val dialogBlue = Color(0xFF5263E7)
+private val dialogBackdrop = Color(0xFF0D0E12).copy(alpha = 0.45f)
 
 @Composable
 private fun DesignDialog(onDismiss: () -> Unit, modifier: Modifier = Modifier,
+    useFigmaBackdrop: Boolean = false,
     content: @Composable ColumnScope.() -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier, color = Color.White, shape = RoundedCornerShape(48.dp),
-            shadowElevation = 18.dp) {
-            Column(Modifier.padding(40.dp), content = content)
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect {
+            if (useFigmaBackdrop) {
+                dialogWindow?.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                dialogWindow?.setDimAmount(0f)
+                dialogWindow?.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+                dialogWindow?.setLayout(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT
+                )
+            }
+        }
+        val interactionSource = remember { MutableInteractionSource() }
+        val dialogSurface: @Composable () -> Unit = {
+            Surface(
+                modifier.then(if (useFigmaBackdrop) Modifier.clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = {}
+                ) else Modifier),
+                color = Color.White,
+                shape = RoundedCornerShape(48.dp),
+                shadowElevation = 18.dp
+            ) {
+                Column(Modifier.padding(40.dp), content = content)
+            }
+        }
+        if (useFigmaBackdrop) {
+            Box(
+                Modifier.fillMaxSize().background(dialogBackdrop).clickable(onClick = onDismiss),
+                contentAlignment = Alignment.Center
+            ) { dialogSurface() }
+        } else {
+            dialogSurface()
         }
     }
 }
 
 @Composable
 internal fun DesignedSettingsDialog(s: WireSession) {
-    DesignDialog({ s.showSettings = false }, Modifier.width(950.dp)) {
+    DesignDialog({ s.showSettings = false }, Modifier.width(950.dp), useFigmaBackdrop = true) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("설정", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium,
                 color = dialogInk)
@@ -71,7 +112,7 @@ internal fun DesignedSettingsDialog(s: WireSession) {
 
 @Composable
 internal fun DesignedEndDialog(s: WireSession) {
-    DesignDialog({ s.showEnd = false }, Modifier.width(800.dp)) {
+    DesignDialog({ s.showEnd = false }, Modifier.width(800.dp), useFigmaBackdrop = true) {
         Box(Modifier.size(88.dp).align(Alignment.CenterHorizontally)
             .background(Color(0xFFFF7777), CircleShape), contentAlignment = Alignment.Center) {
             Text("↩", style = MaterialTheme.typography.headlineLarge, color = Color.White)

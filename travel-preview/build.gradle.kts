@@ -12,6 +12,7 @@ val localProperties = Properties().apply {
     if (localFile.isFile) localFile.inputStream().use(::load)
 }
 val naverMapClientId = localProperties.getProperty("NAVER_MAP_CLIENT_ID", "").trim()
+val naverMapStyleId = localProperties.getProperty("NAVER_MAP_STYLE_ID", "").trim()
 
 android {
     namespace = "com.contest.travel.preview"
@@ -22,6 +23,7 @@ android {
     defaultConfig {
         applicationId = "com.contest.travel.preview"
         manifestPlaceholders["NAVER_MAP_CLIENT_ID"] = naverMapClientId
+        manifestPlaceholders["NAVER_MAP_STYLE_ID"] = naverMapStyleId
         minSdk = 28
         targetSdk = 35
         versionCode = 1
@@ -42,6 +44,7 @@ dependencies {
     implementation("ai.pleos.playground:SpeechToText:3.3.1")
     implementation("ai.pleos.playground:FusedLocation:1.1.3")
     implementation("com.naver.maps:map-sdk:3.24.1")
+    implementation("org.maplibre.gl:android-sdk:11.11.0")
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)

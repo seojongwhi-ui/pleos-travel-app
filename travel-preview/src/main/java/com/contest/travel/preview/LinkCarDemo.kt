@@ -83,6 +83,8 @@ internal class WireSession {
     var pollBusy by mutableStateOf(false)
     var showVoiceMenu by mutableStateOf(false)
     var speechFeedbackVisible by mutableStateOf(false)
+    var pollDemoVisible by mutableStateOf(false)
+    var pollDemoSpeaking by mutableStateOf(false)
     var companionsExpanded by mutableStateOf(false)
     var showVoiceRecorder by mutableStateOf(false)
     var showPollTextEntry by mutableStateOf(false)
@@ -137,6 +139,8 @@ internal class WireSession {
         roadVoiceShown = false
         companionsExpanded = false
         speechFeedbackVisible = false
+        pollDemoVisible = false
+        pollDemoSpeaking = false
         waypoint = false
         vote = ""
         message = ""
@@ -183,6 +187,17 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
             s.pollBusy = true
         }
     }
+    fun playDemoPollSpeech() {
+        voice.stopListening()
+        s.speechFeedbackVisible = false
+        s.pollDemoVisible = true
+        s.pollDemoSpeaking = false
+        s.message = ""
+        s.pollDemoSpeaking = voice.playDemoPollSpeech {
+            s.pollDemoSpeaking = false
+        }
+        if (!s.pollDemoSpeaking) s.message = voice.status
+    }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startPollSpeech() else {
             s.message = "마이크 권한이 거부되어 음성 녹음은 사용할 수 없어요."
@@ -198,6 +213,11 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
     BackHandler {
         if (s.showVoiceRecorder) s.showVoiceRecorder = false
         else if (s.showVoiceMenu) s.showVoiceMenu = false
+        else if (s.pollDemoVisible) {
+            voice.audio.stopPlayback()
+            s.pollDemoSpeaking = false
+            s.pollDemoVisible = false
+        }
         else if (screen == WireScreen.HOME) onExit() else s.back()
     }
 
@@ -302,10 +322,13 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
                             s.progress = 0f
                             s.demoVoiceTriggered = false
                             s.roadVoiceShown = false
+                            s.pollDemoVisible = false
+                            s.pollDemoSpeaking = false
                             s.message = "출발 지점으로 돌아갔어요."
                             s.drive()
                         }, onPollSpeech = {
-                        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+                        if (designWide) playDemoPollSpeech()
+                        else if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
                             PackageManager.PERMISSION_GRANTED) startPollSpeech()
                         else if (setupRestricted) {
                             s.message = "마이크 권한이 필요해요. 정차한 뒤 허용해 주세요."

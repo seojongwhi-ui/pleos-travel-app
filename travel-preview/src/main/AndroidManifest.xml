@@ -21,6 +21,9 @@
         <meta-data
             android:name="com.naver.maps.map.NCP_KEY_ID"
             android:value="${NAVER_MAP_CLIENT_ID}" />
+        <meta-data
+            android:name="com.contest.travel.preview.NAVER_MAP_STYLE_ID"
+            android:value="${NAVER_MAP_STYLE_ID}" />
         <uses-library android:name="android.car" android:required="false" />
         <activity
             android:name=".MainActivity"

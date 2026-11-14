@@ -54,19 +54,25 @@ private fun DPin(x: Number, y: Number, portrait: Int, selected: Boolean = false,
 @Composable
 internal fun DRoute(s: WireSession, screen: WireScreen, height: Float, enabled: Boolean,
     voice: LinkCarVoiceRuntime, onResetDemo: () -> Unit) {
-    val expanded = screen == WireScreen.MAP
+    val expanded = height >= 280f
     val preview = s.designPreviewNode != null
     val realCar = LocalConvoy.current.useRealCar && !preview
     val live = LocalTripLive.current
     val ownKnown = !realCar || (live.location.status == ReadStatus.READY && live.location.value?.isValid() == true)
     // The team's MapLibre bridge needs no NAVER key. Authored snapshots keep the Figma map.
     val interactiveMap = expanded && !preview
-    val routeModifier = Modifier.semantics { contentDescription = if (expanded) "지도 접기" else "지도 펼치기" }
-        .linkCarPress(enabled && screen in setOf(WireScreen.DRIVE, WireScreen.MAP, WireScreen.DJ)) {
-            if (expanded) s.drive() else s.open(WireScreen.MAP)
-        }
+    val routeModifier = Modifier.semantics { contentDescription = if (expanded) "펼친 지도" else "접힌 지도" }
     DPanel(24, 106, 1652, height, 48, color = androidx.compose.ui.graphics.Color.White,
         modifier = if (interactiveMap) Modifier else routeModifier) {
+        if (!preview) {
+            if (expanded) {
+                RoadConvoyMap(true, 0, enabled, Modifier.fillMaxSize(), voice.notes.hasDemoMarker)
+                DChip("접기", 1450, 20, 120, onClick = { s.drive() })
+            } else {
+                DesignedRouteStrip(s, voice.notes.hasDemoMarker, height.dp, enabled, onResetDemo)
+            }
+            return@DPanel
+        }
         if (interactiveMap) {
             RoadConvoyMap(true, 0, enabled, Modifier.fillMaxSize(), voice.notes.hasDemoMarker)
             DChip("접기", 20, 20, 120, onClick = { s.drive() })
@@ -142,8 +148,8 @@ internal fun DRoute(s: WireSession, screen: WireScreen, height: Float, enabled: 
 }
 
 @Composable
-internal fun DCompanions(s: WireSession, screen: WireScreen, feed: DFeed, y: Float, height: Float,
-    compact: Boolean, enabled: Boolean) {
+internal fun DCompanions(s: WireSession, screen: WireScreen, feed: DFeed, y: Float,
+    height: Float, compact: Boolean, enabled: Boolean) {
     DPanel(1062, y, 614, height) {
         if (compact) DCompactCars(s, screen, height, enabled)
         else {
@@ -324,33 +330,30 @@ private fun DRequest(text: String, x: Number, y: Number, width: Number = 149, ty
 @Composable
 internal fun DMusic(s: WireSession, height: Float, expanded: Boolean, enabled: Boolean) {
     val preview = s.designPreviewNode != null
-    DPanel(0, 1184 - height, 1700, height, 0, modifier = Modifier.linkCarPress(enabled) {
-        if (expanded) s.drive() else s.open(WireScreen.DJ)
-    }) {
+    DPanel(0, 1184 - height, 1700, height, 0) {
         DMusicGlow(expanded)
-        DPanel(800, 8, 100, 6, 6, Color(0xFFE8E8E8))
         Crossfade(targetState = expanded, animationSpec = tween(230), label = "musicDetail") { large ->
             Box(Modifier.requiredSize(1700.dp, (if (large) 560 else 200).dp)) {
                 if (large) CompositionLocalProvider(LocalDrivingAssets provides drivingFigmaAssets.getValue("443:22856")) {
                     DMusicExpanded(s, enabled)
                 }
                 else {
-                    val art = Modifier.linkCarPress(enabled) { s.open(WireScreen.DJ) }
                     DImage(drivingAsset("imgRectangle346244413", R.drawable.driving_84cf2), 56, 20, 156, 156,
-                        art.clip(RoundedCornerShape(24.dp)), scale = ContentScale.Crop)
+                        Modifier.clip(RoundedCornerShape(24.dp)), scale = ContentScale.Crop)
                     DText(if (preview) "노래명 입력란" else if (s.music) linkCarSongs[s.song % linkCarSongs.size].first else "재생할 곡 없음",
                         252, 36, DType.Song, DrivingFigma.Title, 300)
                     DText(if (preview) "가수 명 입력란" else if (s.music) linkCarSongs[s.song % linkCarSongs.size].second else "음악 없이 출발했어요",
                         252, 84, DType.Label, DrivingFigma.Subtle)
                     if (s.music) DRequest("문준 차 신청", 252, 127)
-                    DMusicControl(R.drawable.driving_91f78, "이전 곡", 556, 56, 85, enabled && s.music) { s.stepSong(-1) }
+                    DMusicControl(R.drawable.driving_91f78, "이전 곡", 556, 56, 85, enabled) { s.stepSong(-1) }
                     DMusicControl(if (s.playing) R.drawable.driving_4ff70 else R.drawable.driving_5c717,
-                        if (s.playing) "일시정지" else "재생", 669, 56, 85, enabled && s.music,
+                        if (s.playing) "일시정지" else "재생", 669, 56, 85, enabled,
                         background = if (!s.playing && s.music) DrivingFigma.Black else Color.Transparent) { s.toggleMusicPlayback() }
-                    DMusicControl(R.drawable.driving_a89f1, "다음 곡", 782, 56, 85, enabled && s.music) { s.stepSong(1) }
+                    DMusicControl(R.drawable.driving_a89f1, "다음 곡", 782, 56, 85, enabled) { s.stepSong(1) }
                     DLine(drivingAsset("imgLine4", R.drawable.driving_5a46c), 1053, 40, 122, vertical = true)
-                    DText(if (s.music) "다음 곡 3" else "다음 곡 0", 1093, 36, DType.Label, Color(0xFFC3C5CC))
-                    DText(if (s.music) "노래명 입력란" else "신청한 곡 없음", 1093, 68, DType.Song, Color(0xFFA8ACB4))
+                    DText("다음 곡 ${linkCarSongs.size}", 1093, 36, DType.Label, Color(0xFFC3C5CC))
+                    DText(if (preview) "노래명 입력란" else linkCarSongs[(s.song + 1) % linkCarSongs.size].first,
+                        1093, 68, DType.Song, Color(0xFFA8ACB4))
                     if (s.music) DRequest("다연 차 신청", 1093, 127)
                     if (s.music) listOf("imgEllipse11", "imgEllipse10", "imgEllipse9").forEachIndexed { i, key ->
                         val x = 1496 - i * 85
@@ -389,18 +392,20 @@ private fun DMusicExpanded(s: WireSession, enabled: Boolean) {
     if (s.music) DRequest("문준 차 신청", 560, 232)
     DSeek(s, enabled && s.music)
     DMusicControl(drivingAsset("imgIcon", R.drawable.driving_d73dc), "이전 곡", 660, 392, 96,
-        enabled && s.music, outlined = true) { s.stepSong(-1) }
+        enabled, outlined = true) { s.stepSong(-1) }
     DMusicControl(if (s.playing) drivingAsset("imgIcon1", R.drawable.driving_62414) else R.drawable.driving_5c717,
-        "일시정지 또는 재생", 792, 392, 96, enabled && s.music, background = DrivingFigma.Black) { s.toggleMusicPlayback() }
+        "일시정지 또는 재생", 792, 392, 96, enabled, background = DrivingFigma.Black) { s.toggleMusicPlayback() }
     DMusicControl(drivingAsset("imgIcon2", R.drawable.driving_f3f01), "다음 곡", 924, 392, 96,
-        enabled && s.music, outlined = true) { s.stepSong(1) }
+        enabled, outlined = true) { s.stepSong(1) }
     DPanel(1180, 48, 464, 464, 40, Color.White.copy(alpha = .75f)) {
-        DText(if (s.music) "다음 곡 3" else "다음 곡 0", 32, 28, DType.Caption, DrivingFigma.Muted)
-        if (s.music) listOf("imgCover", "imgCover1", "imgCover2").forEachIndexed { i, key ->
+        DText("다음 곡 ${linkCarSongs.size}", 32, 28, DType.Caption, DrivingFigma.Muted)
+        listOf("imgCover", "imgCover1", "imgCover2").forEachIndexed { i, key ->
             val top = 72 + i * 114
             DImage(drivingAsset(key, R.drawable.driving_7eac3), 32, top, 96, 96)
             DImage(drivingAsset("imgEllipse", R.drawable.driving_be907), 67, top + 35, 26, 26)
-            DText("노래명 입력란", 146, top + 9, DType.Place, if (i == 0) DrivingFigma.Title else Color(0xFFA8ACB4))
+            DText(if (s.designPreviewNode != null) "노래명 입력란"
+                else linkCarSongs[(s.song + i + 1) % linkCarSongs.size].first,
+                146, top + 9, DType.Place, if (i == 0) DrivingFigma.Title else Color(0xFFA8ACB4))
             DRequest(listOf("다연 차 신청", "문준 차 신청", "내 차 신청")[i], 146, top + 48, 139, DType.Tiny)
         }
         DText("신청은 '모두에게 말하기'로 해요", 32, 414, DType.Small, DrivingFigma.Muted)

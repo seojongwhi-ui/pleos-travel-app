@@ -221,13 +221,21 @@ internal class WireSession {
         if (accepted) { waypoint = true; open(WireScreen.MAP) } else drive()
     }
     fun stepSong(delta: Int) {
-        if (!music) return
+        if (!music) {
+            music = true
+            playing = true
+        }
         designPreviewNode = null
         song = Math.floorMod(song + delta, linkCarSongs.size)
         songSeek = 0f
     }
     fun toggleMusicPlayback() {
-        if (!music) return
+        if (!music) {
+            music = true
+            playing = true
+            songSeek = 0f
+            return
+        }
         designPreviewNode = null
         playing = !playing
     }

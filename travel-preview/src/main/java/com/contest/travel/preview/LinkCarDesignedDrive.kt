@@ -459,7 +459,7 @@ private fun DesignedDriveHeader(s: WireSession, enabled: Boolean) {
 }
 
 @Composable
-private fun DesignedRouteStrip(s: WireSession, voiceMarkerVisible: Boolean, height: Dp,
+internal fun DesignedRouteStrip(s: WireSession, voiceMarkerVisible: Boolean, height: Dp,
     enabled: Boolean, onResetDemo: () -> Unit) {
     val motion = LocalConvoy.current
     BoxWithConstraints(Modifier.fillMaxWidth().height(height).padding(horizontal = 12.dp)

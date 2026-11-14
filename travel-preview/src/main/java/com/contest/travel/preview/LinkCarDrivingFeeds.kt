@@ -160,8 +160,13 @@ internal fun DFeedContent(s: WireSession, feed: DFeed, compact: Boolean, map: Bo
             val p = if (s.designPreviewNode != null) 300f else 690f * s.seconds.coerceIn(0, 10) / 10
             DPanel(136, 440, p, 14, 8, DrivingFigma.Blue)
             DText("${s.seconds}초", 846, 428, DType.Seconds, DrivingFigma.Blue)
-            DButton("노크 취소", 16, 521, 990, enabled = enabled,
+            DButton(if (s.seconds > 0) "노크 취소" else "닫기", 16, 521, 400, enabled = enabled,
                 color = DrivingFigma.Input, ink = DrivingFigma.Disabled) { s.drive() }
+            DButton(if (s.seconds > 0) "응답 시연 · 통화 연결" else "음성 메시지 남기기",
+                432, 521, 574, enabled = enabled) {
+                if (s.seconds > 0) s.acceptPendingDemoKnock()
+                else s.open(WireScreen.VOICE_LEAVE)
+            }
         }
         DFeed.INCOMING -> {
             DImage(drivingCompanionImage(s, s.incomingCaller, "imgAvatar", R.drawable.driving_bce4b), 451, 102, 120, 120)

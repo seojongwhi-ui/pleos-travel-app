@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -258,12 +259,20 @@ internal fun ColumnScope.FigmaDriving(s: WireSession, screen: WireScreen, enable
         val density = LocalDensity.current
         val fit = min(maxWidth.value / 1700f, maxHeight.value / 1184f)
         CompositionLocalProvider(LocalDensity provides Density(density.density * fit, density.fontScale)) {
-            val mapHeight by animateFloatAsState(if (screen == WireScreen.MAP) 560f else 165f,
-                tween(340, easing = FastOutSlowInEasing), label = "drivingMapHeight")
-            val musicHeight by animateFloatAsState(if (screen == WireScreen.DJ) 560f else 200f,
-                tween(340, easing = FastOutSlowInEasing), label = "drivingMusicHeight")
+            var mapDragging by remember { mutableStateOf(false) }
+            var musicDragging by remember { mutableStateOf(false) }
+            var mapTarget by remember { mutableFloatStateOf(if (screen == WireScreen.MAP) 560f else 165f) }
+            var musicTarget by remember { mutableFloatStateOf(if (screen == WireScreen.DJ) 560f else 200f) }
+            LaunchedEffect(screen) {
+                mapTarget = if (screen == WireScreen.MAP) 560f else 165f
+                musicTarget = if (screen == WireScreen.DJ) 560f else 200f
+            }
+            val mapHeight by animateFloatAsState(mapTarget,
+                if (mapDragging) snap() else tween(300), label = "drivingMapHeight")
+            val musicHeight by animateFloatAsState(musicTarget,
+                if (musicDragging) snap() else tween(300), label = "drivingMusicHeight")
             val feed = drivingFeed(s, screen)
-            val compact = screen in setOf(WireScreen.MAP, WireScreen.DJ)
+            val compact = mapHeight >= 280f || musicHeight >= 300f
             val bodyY = 130f + mapHeight
             val bodyH = 1184f - musicHeight - (32f - 8f * (musicHeight - 200f) / 360f) - bodyY
             CompositionLocalProvider(LocalDrivingAssets provides drivingFigmaAssets.getValue(drivingFigmaNode(s, screen))) {
@@ -272,7 +281,7 @@ internal fun ColumnScope.FigmaDriving(s: WireSession, screen: WireScreen, enable
                 DHeader(s, enabled && !setupRestricted)
                 DRoute(s, screen, mapHeight, enabled, voice, onResetDemo)
                 DPanel(24, bodyY, 1022, bodyH) {
-                    val communication = DCommunicationKey(feed, compact, screen == WireScreen.MAP, drivingFigmaNode(s, screen))
+                    val communication = DCommunicationKey(feed, compact, mapHeight >= 280f, drivingFigmaNode(s, screen))
                     AnimatedContent(targetState = communication,
                         transitionSpec = { fadeIn(tween(220)).togetherWith(fadeOut(tween(140))) },
                         label = "drivingCommunication") { (target, small, wasMap, source) ->
@@ -286,9 +295,32 @@ internal fun ColumnScope.FigmaDriving(s: WireSession, screen: WireScreen, enable
                     }
                 }
                 DCompanions(s, screen, feed, bodyY, bodyH, compact, enabled)
-                DMusic(s, musicHeight, screen == WireScreen.DJ, enabled)
-                DPanel(800, bodyY - 15, 100, 6, 6, Color(0xFFEFF1F6))
-                DResizeTargets(s, screen, bodyY, musicHeight, enabled)
+                DMusic(s, musicHeight, musicHeight >= 300f, enabled)
+                DResizeTargets(screen, mapHeight, musicHeight, enabled, onMapDrag = { delta ->
+                        mapDragging = true
+                        mapTarget = (mapTarget + delta / density.density / fit).coerceIn(165f, 560f)
+                    }, onMapRelease = {
+                        mapDragging = false
+                        if (mapTarget >= 280f) {
+                            mapTarget = 560f
+                            if (screen != WireScreen.MAP) s.open(WireScreen.MAP)
+                        } else {
+                            mapTarget = 165f
+                            if (screen == WireScreen.MAP) s.drive()
+                        }
+                    }, onMusicDrag = { delta ->
+                        musicDragging = true
+                        musicTarget = (musicTarget - delta / density.density / fit).coerceIn(200f, 560f)
+                    }, onMusicRelease = {
+                        musicDragging = false
+                        if (musicTarget >= 300f) {
+                            musicTarget = 560f
+                            if (screen != WireScreen.DJ) s.open(WireScreen.DJ)
+                        } else {
+                            musicTarget = 200f
+                            if (screen == WireScreen.DJ) s.drive()
+                        }
+                    })
                 if (s.message.isNotBlank() && s.designPreviewNode == null) {
                     DChip(s.message.take(85), 200, 1148, 1300, 32,
                         color = DrivingFigma.Input, ink = DrivingFigma.Subtle)
@@ -337,21 +369,14 @@ private fun DHeader(s: WireSession, enabled: Boolean) {
 }
 
 @Composable
-private fun DResizeTargets(s: WireSession, screen: WireScreen, bodyY: Float,
-    musicHeight: Float, enabled: Boolean) {
+private fun DResizeTargets(screen: WireScreen, mapHeight: Float, musicHeight: Float, enabled: Boolean,
+    onMapDrag: (Float) -> Unit, onMapRelease: () -> Unit,
+    onMusicDrag: (Float) -> Unit, onMusicRelease: () -> Unit) {
     val canResize = enabled && screen in setOf(WireScreen.DRIVE, WireScreen.MAP, WireScreen.DJ)
-    DriveResizeGrip(GripAxis.VERTICAL, "지도 펼치기 또는 접기", canResize,
-        Modifier.offset(802.dp, (bodyY - 23).dp), barVisible = false,
-        onClick = { if (screen == WireScreen.MAP) s.drive() else s.open(WireScreen.MAP) },
-        onDrag = {}, onRelease = { delta ->
-            if (kotlin.math.abs(delta) > 20) { s.designPreviewNode = null
-                if (screen == WireScreen.MAP) s.drive() else s.open(WireScreen.MAP) }
-        })
-    DriveResizeGrip(GripAxis.VERTICAL, "음악 펼치기 또는 접기", canResize,
-        Modifier.offset(802.dp, (1184f - musicHeight).dp), barVisible = false,
-        onClick = { if (screen == WireScreen.DJ) s.drive() else s.open(WireScreen.DJ) },
-        onDrag = {}, onRelease = { delta ->
-            if (kotlin.math.abs(delta) > 20) { s.designPreviewNode = null
-                if (screen == WireScreen.DJ) s.drive() else s.open(WireScreen.DJ) }
-        })
+    DriveResizeGrip(GripAxis.VERTICAL, "지도를 아래로 끌어 펼치거나 위로 끌어 접기", canResize,
+        Modifier.offset(802.dp, (106f + mapHeight - 24f).dp),
+        onDrag = onMapDrag, onRelease = { onMapRelease() })
+    DriveResizeGrip(GripAxis.VERTICAL, "음악을 위로 끌어 펼치거나 아래로 끌어 접기", canResize,
+        Modifier.offset(802.dp, (1184f - musicHeight + 8f).dp),
+        onDrag = onMusicDrag, onRelease = { onMusicRelease() })
 }

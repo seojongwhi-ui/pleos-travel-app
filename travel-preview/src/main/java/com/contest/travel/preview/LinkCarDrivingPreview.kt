@@ -17,7 +17,7 @@ internal fun WireSession.applyDrivingDesignPreview(node: String?): Boolean {
         else -> return false
     }
     designPreviewNode = node
-    drivingIdle = node == "443:21947"
+    drivingIdle = node != "443:21058"
     showVoiceMenu = node == "443:22235"
     speechFeedbackVisible = node == "443:21359"
     proposalVisible = node in setOf("443:23005", "443:24791", "443:25023")

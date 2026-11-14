@@ -50,7 +50,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -75,8 +74,8 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import android.os.SystemClock
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlinx.coroutines.delay
 
 /** S-10 / Figma 328:5199, adapted to the Connect-S app activity region. */
@@ -623,35 +622,36 @@ internal fun DesignedRoadVoiceRecorderCard(modifier: Modifier = Modifier, onDone
     }
 }
 
+// Relative bar heights sampled from the user's second reference image; retain the app's color.
+private val recordingBarHeights = floatArrayOf(
+    .33f, .18f, .57f, .57f, .37f, .48f, .30f, .43f, .33f, .22f, .68f,
+    .51f, .61f, .46f, .27f, .62f, .61f, .41f, .74f, .28f, .28f, .34f,
+    .39f, .26f, .31f, .73f, .72f, .17f, .68f, .73f, .75f, .49f, .44f,
+    .61f, .38f, .56f, .50f, .66f, .53f, .48f, .30f, .65f, .59f, .45f,
+    .41f, .65f, .48f, .28f, .62f, .21f, .50f, .69f, .60f, .36f, .35f,
+    .44f, .63f, .28f, .17f, .37f, .60f, .41f, .36f
+)
+
 @Composable
-private fun DemoRecordingWaves(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "녹음 시연 파형")
+internal fun DemoRecordingWaves(modifier: Modifier = Modifier, level: Float = .3f, active: Boolean = true) {
+    val energy by animateFloatAsState(
+        if (active) sqrt(level.coerceIn(0f, 1f)) else 0f,
+        animationSpec = tween(140), label = "녹음 음량")
+    val transition = rememberInfiniteTransition(label = "녹음 막대 파형")
     val phase by transition.animateFloat(0f, (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(tween(1_700, easing = LinearEasing)),
         label = "일렁이는 파형")
     Canvas(modifier) {
         val mid = size.height / 2f
-        repeat(3) { layer ->
-            val path = Path()
-            for (point in 0..100) {
-                val fraction = point / 100f
-                val x = size.width * fraction
-                val envelope = (1f - abs(fraction - .5f) * 1.8f).coerceAtLeast(0f)
-                val wave = sin(fraction * PI * (2.4 + layer * .45) + phase + layer * .9)
-                val y = mid + wave.toFloat() * size.height * (.08f + layer * .035f) * envelope
-                if (point == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            drawPath(path, DriveDesign.Blue.copy(alpha = .12f - layer * .025f),
-                style = Stroke(width = (12 - layer * 3).dp.toPx(), cap = StrokeCap.Round))
-        }
-        val gap = size.width / 38f
-        for (index in 3..35) {
-            val x = gap * index
-            if (abs(x - size.width / 2f) < 88.dp.toPx()) continue
-            val height = (7f + 26f * abs(sin(index * .71 + phase))).dp.toPx()
-            drawLine(DriveDesign.BlueMid.copy(alpha = .55f),
-                Offset(x, mid - height / 2f), Offset(x, mid + height / 2f),
-                strokeWidth = 5.dp.toPx(), cap = StrokeCap.Round)
+        val spacing = size.width / recordingBarHeights.size
+        val stroke = spacing * .46f
+        recordingBarHeights.forEachIndexed { index, baseHeight ->
+            val motion = if (active) 1f + .12f * sin(index * .62f - phase) else 1f
+            val height = size.height * (baseHeight * motion * (1f + .65f * energy)).coerceAtMost(.94f)
+            val halfLine = (height - stroke).coerceAtLeast(0f) / 2f
+            val x = spacing * (index + .5f)
+            drawLine(DriveDesign.Blue.copy(alpha = .12f), Offset(x, mid - halfLine),
+                Offset(x, mid + halfLine), strokeWidth = stroke, cap = StrokeCap.Round)
         }
     }
 }

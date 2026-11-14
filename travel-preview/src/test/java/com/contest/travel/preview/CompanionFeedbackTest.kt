@@ -5,22 +5,22 @@ import org.junit.Test
 
 class CompanionFeedbackTest {
     @Test fun aPenaltyChangesOnlyItsRecipientAndSurvivesPanelChanges() {
-        val scores = CompanionScores().apply { reset(100, 64) }
+        val scores = CompanionScores().apply { reset(100, 70) }
         val event = scores.deduct("다연 차", 3, "급가속")!!
         assertEquals(97, scores.score("다연 차"))
-        assertEquals(64, scores.score("문준 차"))
+        assertEquals(70, scores.score("문준 차"))
         assertEquals(3, event.points)
         assertSame(event, scores.penalty("다연 차"))
         assertNull(scores.penalty("문준 차"))
     }
 
-    @Test fun deductionsNeverGoBelowZeroOrInventPointsLostAtTheFloor() {
-        val scores = CompanionScores().apply { reset(2, 64) }
+    @Test fun deductionsNeverGoBelow70OrInventPointsLostAtTheFloor() {
+        val scores = CompanionScores().apply { reset(72, 64) }
         assertEquals(2, scores.deduct("다연 차", 3, "급가속")!!.points)
-        assertEquals(0, scores.score("다연 차"))
+        assertEquals(70, scores.score("다연 차"))
         assertNull(scores.deduct("다연 차", 3, "급가속"))
         assertNull(scores.deduct("문준 차", -3, "급가속"))
-        assertEquals(64, scores.score("문준 차"))
+        assertEquals(70, scores.score("문준 차"))
     }
 
     @Test fun endingAndSettingsKeepTheLiveVoiceMenuAssetContext() {

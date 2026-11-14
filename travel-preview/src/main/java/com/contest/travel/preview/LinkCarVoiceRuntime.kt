@@ -56,6 +56,8 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
         private set
     var isRecording by mutableStateOf(false)
         private set
+    var recordingStartedAt = 0L
+        private set
     var currentPoint by mutableStateOf<GeoPoint?>(null)
         private set
     var locationStatus by mutableStateOf("시연 경로 사용")
@@ -96,8 +98,8 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
         }.onFailure { locationStatus = "FusedLocation 연결 실패: ${it.message}" }
     }
 
-    fun startPollSpeech(onTranscript: (String) -> Unit) {
-        if (!hasMicrophonePermission()) { status = "마이크 권한이 필요합니다."; return }
+    /** Recognize the recording after saving it; no competing microphone capture or sample TTS. */
+    fun recognizeRecording(note: RoadVoiceNote, onTranscript: (String) -> Unit) {
         if (isRecording) { status = "녹음을 끝낸 뒤 투표 안건을 말해 주세요."; return }
         if (isListening) return
         stopListening()
@@ -105,10 +107,10 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
         runCatching {
             val service = SpeechToText(context, Mode.ON_DEVICE)
             val listener = object : ResultListener {
-                override fun onReady() { status = "마이크 준비 완료. 투표할 내용을 말해 주세요." }
-                override fun onStartedRecognition() { isListening = true; status = "듣고 있어요. 투표 안건을 말해 주세요." }
+                override fun onReady() { if (stt === service) status = "녹음한 말을 확인하고 있어요." }
+                override fun onStartedRecognition() { if (stt === service) { isListening = true; status = "녹음한 말을 확인하고 있어요." } }
                 override fun onUpdated(sttText: String, completed: Boolean) {
-                    if (completed && !finalReceived && sttText.isNotBlank()) {
+                    if (stt === service && completed && !finalReceived && sttText.isNotBlank()) {
                         finalReceived = true
                         isListening = false
                         status = "인식한 말: $sttText"
@@ -118,34 +120,42 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
                 override fun onUpdatedEpdData(start: Long, end: Long) = Unit
                 override fun onUpdatedRms(rms: Double) = Unit
                 override fun onEndedRecognition() {
+                    if (stt !== service) return
                     isListening = false
                     if (!finalReceived) status = "음성을 인식하지 못했습니다. 다시 말해 주세요."
                 }
-                override fun onError(error: ErrorType) { isListening = false; status = sttErrorMessage(error) }
+                override fun onError(error: ErrorType) { if (stt === service) { isListening = false; status = sttErrorMessage(error) } }
             }
             stt = service
             isListening = true
             status = "Pleos 음성 인식을 연결하고 있어요."
             service.initialize(object : OnInitializeListener {
                 override fun onSuccess() {
+                    if (stt !== service) return
                     runCatching {
                         service.addListener(listener)
                         sttListener = listener
                         service.setLocale(Locale.KOREA)
-                        service.request()
+                        // The recorder writes 16 kHz, mono, 16-bit PCM with a 44-byte WAV header.
+                        val wav = notes.file(note).readBytes()
+                        check(wav.size > 44 && String(wav, 0, 4) == "RIFF") { "녹음 파일을 확인해 주세요." }
+                        service.sendAudio(wav.copyOfRange(44, wav.size))
+                        service.completeAudioSend()
                     }
                         .onFailure { status = "Pleos 음성 인식 시작 실패: ${it.message}"; isListening = false }
                 }
-                override fun onFailure(error: ErrorType) { isListening = false; status = sttErrorMessage(error) }
+                override fun onFailure(error: ErrorType) { if (stt === service) { isListening = false; status = sttErrorMessage(error) } }
             })
         }.onFailure { isListening = false; status = "Pleos STT 연결 실패: ${it.message}" }
     }
 
     fun stopListening() {
-        runCatching { stt?.stop() }
-        sttListener?.let { listener -> runCatching { stt?.removeListener(listener) } }
+        val previous = stt
+        stt = null
+        runCatching { previous?.stop() }
+        sttListener?.let { listener -> runCatching { previous?.removeListener(listener) } }
         sttListener = null
-        runCatching { stt?.release() }
+        runCatching { previous?.release() }
         stt = null
         isListening = false
     }
@@ -157,16 +167,17 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
         val file = notes.newFile()
         audio.start(file).onSuccess {
             isRecording = true
+            recordingStartedAt = android.os.SystemClock.elapsedRealtime()
             status = "원본 음성을 녹음하고 있어요. 완료를 눌러 저장하세요."
         }.onFailure { status = "녹음 시작 실패: ${it.message}" }
     }
 
-    fun finishRecording(progress: Float, fallbackPoint: GeoPoint?): RoadVoiceNote? {
+    fun finishRecording(progress: Float, fallbackPoint: GeoPoint?, kind: String = "road"): RoadVoiceNote? {
         if (!isRecording) { status = "진행 중인 녹음이 없습니다."; return null }
         isRecording = false
         return audio.stopAndSave().mapCatching { file ->
-            val note = notes.add(file, progress, currentPoint ?: fallbackPoint)
-            status = "음성을 저장했어요. 설정에서 자동 재생을 켜거나 이전 대화에서 직접 들어 보세요."
+            val note = notes.add(file, progress, currentPoint ?: fallbackPoint, kind)
+            status = "내 목소리를 저장했어요. 이전 대화에서 다시 들을 수 있어요."
             note
         }.onFailure { status = "녹음 저장 실패: ${it.message}" }.getOrNull()
     }
@@ -209,26 +220,27 @@ internal class LinkCarVoiceRuntime(private val context: Context) {
         }.onFailure { status = "길에 남긴 음성 재생 실패: ${it.message}" }.isSuccess
     }
 
-    /** Bundled placeholder voice; replace the asset when the team's recording arrives. */
-    fun playDemoPollSpeech(onFinished: () -> Unit): Boolean {
-        return runCatching {
-            val file = File(context.cacheDir, "poll_agenda_demo.wav")
-            context.assets.open("poll_agenda_demo.wav").use { input ->
-                file.outputStream().use { output -> input.copyTo(output) }
-            }
+    /** This recording is independent of the road marker and is replayable after that marker is consumed. */
+    fun playMunjunHistory() {
+        playHistoryAsset("munjun_song_message.m4a", "문준 차의 원본 음성을 재생하고 있어요.")
+    }
+    fun playRoadHistory() {
+        playHistoryAsset(DayeonRoadVoiceAsset, "다연 차가 길에 남긴 원본 음성을 재생하고 있어요.")
+    }
+    private fun playHistoryAsset(asset: String, message: String) {
+        if (audio.playingKey == asset) { audio.stopPlayback(); return }
+        runCatching {
             audio.stopPlayback()
-            audio.play(file) {
-                status = "시연 투표 안건 음성 재생 완료"
-                onFinished()
-            }.getOrThrow()
-        }.onSuccess {
-            status = "시연 투표 안건 음성을 재생하고 있어요."
-        }.onFailure {
-            status = "시연 투표 음성 재생 실패: ${it.message ?: "음성 파일을 확인해 주세요."}"
-        }.isSuccess
+            val file = File(context.cacheDir, asset)
+            context.assets.open(asset).use { input -> file.outputStream().use { input.copyTo(it) } }
+            audio.play(file) { status = "원본 음성 재생 완료" }.getOrThrow()
+        }.onSuccess { status = message }
+            .onFailure { status = "원본 음성 재생 실패: ${it.message}" }
     }
 
     fun play(note: RoadVoiceNote, car: String? = null) {
+        if (audio.playingKey == note.fileName) { audio.stopPlayback(); return }
+        audio.stopPlayback()
         val displayCar = when (car) {
             "B차" -> "다연 차"
             "C차" -> "문준 차"

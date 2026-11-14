@@ -41,7 +41,7 @@ private const val ScoreFeedbackMillis = 2600
 
 /** One native layer per button, shared by the full and compact companion cards. */
 internal class CompanionButtonMotion(private val s: WireSession, private val name: String,
-    private val scope: CoroutineScope) {
+    private val scope: CoroutineScope, private val onKnock: () -> Unit) {
     private val impulse = Animatable(0f)
     private var job: Job? = null
     private var generation = 0
@@ -67,14 +67,16 @@ internal class CompanionButtonMotion(private val s: WireSession, private val nam
     }
 
     fun tap(enabled: Boolean, canKnock: Boolean) {
-        if (!enabled || busy || (canKnock && s.pendingKnockTarget != null)) return
+        if (!enabled || busy) return
         val request = ++generation
         job?.cancel()
         knocking = canKnock
         busy = true
         showLockedHint = !canKnock
-        val origin = s.screen
-        if (canKnock) s.pendingKnockTarget = name
+        if (canKnock) {
+            s.pendingKnockTarget = name
+            onKnock()
+        }
         job = scope.launch {
             try {
                 impulse.snapTo(0f)
@@ -88,10 +90,7 @@ internal class CompanionButtonMotion(private val s: WireSession, private val nam
                     .4f at 220; -.15f at 280; 0f at 360
                 })
                 busy = false
-                if (canKnock) {
-                    if (s.screen == origin && !s.showEnd && !s.showSettings &&
-                        !s.showVoiceMenu && !s.showHistory && !s.showVoiceRecorder) s.sendKnock(name)
-                } else delay(2300)
+                if (!canKnock) delay(2300)
             } finally {
                 if (generation == request) {
                     busy = false
@@ -104,9 +103,11 @@ internal class CompanionButtonMotion(private val s: WireSession, private val nam
 }
 
 @Composable
-internal fun rememberCompanionButtonMotion(s: WireSession, name: String): CompanionButtonMotion {
+internal fun rememberCompanionButtonMotion(s: WireSession, name: String,
+    onKnock: (String) -> Unit): CompanionButtonMotion {
     val scope = rememberCoroutineScope()
-    return remember(s, name, scope) { CompanionButtonMotion(s, name, scope) }
+    val latestKnock by rememberUpdatedState(onKnock)
+    return remember(s, name, scope) { CompanionButtonMotion(s, name, scope) { latestKnock(name) } }
 }
 
 @Composable
@@ -133,7 +134,8 @@ internal fun DDrivingScore(s: WireSession, name: String, index: Int, x: Number, 
     val number = remember(s, name) { Animatable(score.toFloat()) }
     val reaction = remember(s, name) { Animatable(0f) }
     val badge = remember(s, name) { Animatable(1f) }
-    val baseColor = if (index == 0) DrivingFigma.ScoreBlue else DrivingFigma.Red
+    val baseColor = if (isLowDrivingScore(score)) DrivingFigma.Red else DrivingFigma.ScoreBlue
+    val feedbackColor = if (event?.gained == true) DrivingFigma.Green else DrivingFigma.PenaltyInk
     LaunchedEffect(score, event?.id) {
         if (event == null) number.snapTo(score.toFloat())
         else number.animateTo(score.toFloat(), tween(680))
@@ -170,7 +172,7 @@ internal fun DDrivingScore(s: WireSession, name: String, index: Int, x: Number, 
         if (compact) 55 else 73)
         .semantics {
             contentDescription = "$name 주행 점수 ${score}점" +
-                (event?.let { ", ${it.reason} ${it.points}점 감점" } ?: "") +
+                (event?.let { ", ${it.reason} ${it.signedPoints}점" } ?: "") +
                 if (s.motionPreview) ", 감점 시연" else ""
             liveRegion = LiveRegionMode.Polite
         }.then(if (s.motionPreview) Modifier.linkCarPress(enabled) {
@@ -180,11 +182,11 @@ internal fun DDrivingScore(s: WireSession, name: String, index: Int, x: Number, 
             translationY = reaction.value * 3.dp.toPx()
             scaleX = 1f + .045f * abs(reaction.value); scaleY = scaleX
         }, style = (if (compact) DType.CompactScore else DType.Score).style(
-            lerp(baseColor, DrivingFigma.PenaltyInk, .65f * abs(reaction.value)),
+            lerp(baseColor, feedbackColor, .65f * abs(reaction.value)),
             if (compact) TextAlign.Start else TextAlign.Center), maxLines = 1, softWrap = false)
     }
-    if (event != null) Box(Modifier.dBounds(x.toFloat() + if (compact) -6 else 35,
-        y.toFloat() - if (compact) 24 else 12, 75, 38).graphicsLayer {
+    if (event != null) Box(Modifier.dBounds(x.toFloat() + if (compact) -12 else 20,
+        y.toFloat() - if (compact) 24 else 12, if (event.reason == "급가속") 75 else 104, 38).graphicsLayer {
             val p = badge.value
             alpha = when { p < .07f -> p / .07f; p > .78f -> (1f - p) / .22f; else -> 1f }
             translationY = -8.dp.toPx() * p
@@ -193,10 +195,12 @@ internal fun DDrivingScore(s: WireSession, name: String, index: Int, x: Number, 
         }) {
         if (event.reason == "급가속" && event.points == 3)
             DImage(R.drawable.driving_score_acceleration_penalty, 0, 0, 75, 38)
-        else DPanel(8, 6, 59, 22, 4, DrivingFigma.PenaltySurface,
-            Modifier.border(1.dp, DrivingFigma.PenaltyBorder, RoundedCornerShape(4.dp))) {
-            Text("${event.reason} -${event.points}", Modifier.align(Alignment.Center),
-                style = DType.Micro.style(DrivingFigma.PenaltyInk))
+        else DPanel(0, 6, 104, 26, 4,
+            if (event.gained) Color(0xFFE5F7ED) else DrivingFigma.PenaltySurface,
+            Modifier.border(1.dp, if (event.gained) DrivingFigma.Green.copy(alpha = .25f)
+                else DrivingFigma.PenaltyBorder, RoundedCornerShape(4.dp))) {
+            Text("${event.reason} ${event.signedPoints}", Modifier.align(Alignment.Center),
+                style = DType.Tiny.style(feedbackColor), maxLines = 1)
         }
     }
 }

@@ -6,8 +6,6 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
-import android.media.MediaRecorder
-import android.os.Build
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -16,6 +14,16 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import java.security.MessageDigest
+
+internal const val DayeonRoadVoiceAsset = "dayeon_road_message.m4a"
+private const val RoadMarkerNarrationAsset = "road_marker_ai.mp3"
+// Upgrade earlier bundled markers only. History keeps Dayeon's original recording;
+// a marker imported/recorded by the user stays intact.
+private val LegacyRoadVoiceSha256 = setOf(
+    "3b1a05ebc223357eaee3aa677d16cbb3fbdd73024091cbbae9d2d15b484f3f93", // original demo WAV
+    "ba564ca6cfdd275bc71557204cb4d1ab7e04dc8d460cfe30ba1724b922cb8e12" // Dayeon's recording
+)
 
 internal data class RoadVoiceNote(
     val id: String,
@@ -24,7 +32,8 @@ internal data class RoadVoiceNote(
     val latitude: Double?,
     val longitude: Double?,
     val createdAt: Long,
-    val playedBy: Set<String> = emptySet()
+    val playedBy: Set<String> = emptySet(),
+    val kind: String = "road"
 )
 
 /** Original microphone audio stays in this app's private storage on the demo device. */
@@ -45,19 +54,32 @@ internal class RoadVoiceNoteStore(context: Context) {
     }
 
     private fun importBundledDemoMarker() {
-        if (hasDemoMarker || prefs.getBoolean("marker_consumed", false)) return
-        val name = app.assets.list("")?.firstOrNull {
-            it in setOf("road_voice_demo.m4a", "road_voice_demo.mp3", "road_voice_demo.wav", "road_voice_demo.ogg")
-        } ?: return
         runCatching {
-            app.assets.open(name).use { source ->
-                markerFile.outputStream().use { target -> source.copyTo(target) }
+            if (markerFile.isFile && markerFile.length() > 0L) {
+                val digest = MessageDigest.getInstance("SHA-256")
+                markerFile.inputStream().use { source ->
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = source.read(buffer)
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                    }
+                }
+                if (digest.digest().joinToString("") { "%02x".format(it) } !in LegacyRoadVoiceSha256)
+                    return
             }
-            if (markerFile.length() > 0L) hasDemoMarker = true else markerFile.delete()
+            val temp = File(directory, "bundled_road_voice.tmp")
+            try {
+                app.assets.open(RoadMarkerNarrationAsset).use { source ->
+                    temp.outputStream().use { target -> source.copyTo(target) }
+                }
+                check(temp.length() > 0L && temp.renameTo(markerFile))
+                hasDemoMarker = !prefs.getBoolean("marker_consumed", false)
+            } finally { temp.delete() }
         }
     }
 
-    fun newFile(): File = File(directory, "${UUID.randomUUID()}.m4a")
+    fun newFile(): File = File(directory, "${UUID.randomUUID()}.wav")
 
     /** A local audio file is placed 200 m ahead of the trip's starting point. */
     fun importDemoMarker(uri: Uri): Result<Unit> = runCatching {
@@ -100,9 +122,7 @@ internal class RoadVoiceNoteStore(context: Context) {
     }
 
     fun resetBundledDemoMarker(): Boolean {
-        val bundled = app.assets.list("")?.any {
-            it in setOf("road_voice_demo.m4a", "road_voice_demo.mp3", "road_voice_demo.wav", "road_voice_demo.ogg")
-        } == true
+        val bundled = app.assets.list("")?.contains(RoadMarkerNarrationAsset) == true
         if (!bundled) return false
         markerFile.delete()
         hasDemoMarker = false
@@ -122,10 +142,10 @@ internal class RoadVoiceNoteStore(context: Context) {
         hasDemoMarker = false
     }
 
-    fun add(file: File, progress: Float, point: GeoPoint?): RoadVoiceNote {
+    fun add(file: File, progress: Float, point: GeoPoint?, kind: String = "road"): RoadVoiceNote {
         require(file.parentFile?.canonicalFile == directory.canonicalFile && file.isFile)
         val note = RoadVoiceNote(file.nameWithoutExtension, file.name, progress.coerceIn(0f, 1f),
-            point?.latitude, point?.longitude, System.currentTimeMillis())
+            point?.latitude, point?.longitude, System.currentTimeMillis(), kind = kind)
         notes.add(note)
         persist()
         return note
@@ -135,7 +155,7 @@ internal class RoadVoiceNoteStore(context: Context) {
 
     /** B/C are local simulated follower cars; no cross-vehicle transport is implied. */
     fun due(leaderProgress: Float): Pair<RoadVoiceNote, String>? {
-        for (note in notes) {
+        for (note in notes.filter { it.kind == "road" }) {
             for ((car, gap) in listOf("B차" to .08f, "C차" to .15f)) {
                 if (car !in note.playedBy && leaderProgress - gap >= note.anchorProgress && file(note).isFile)
                     return note to car
@@ -158,7 +178,7 @@ internal class RoadVoiceNoteStore(context: Context) {
                 .put("progress", note.anchorProgress.toDouble())
                 .put("latitude", note.latitude ?: JSONObject.NULL)
                 .put("longitude", note.longitude ?: JSONObject.NULL)
-                .put("createdAt", note.createdAt)
+                .put("createdAt", note.createdAt).put("kind", note.kind)
                 .put("playedBy", JSONArray(note.playedBy.toList())))
         }
         prefs.edit().putString("notes", array.toString()).apply()
@@ -178,69 +198,30 @@ internal class RoadVoiceNoteStore(context: Context) {
                     item.optDouble("latitude").takeIf { it.isFinite() },
                     item.optDouble("longitude").takeIf { it.isFinite() },
                     item.getLong("createdAt"),
-                    (0 until played.length()).map { played.getString(it) }.toSet()))
+                    (0 until played.length()).map { played.getString(it) }.toSet(),
+                    item.optString("kind", "road")))
             }
         }
     }
 }
 
 internal class LinkCarOriginalAudio(private val context: Context) {
-    private var recorder: MediaRecorder? = null
-    private var recordingFile: File? = null
+    private val microphone = LinkCarMicrophone()
     private var player: MediaPlayer? = null
     private val audioManager = context.getSystemService(AudioManager::class.java)
     private var focusRequest: AudioFocusRequest? = null
-    val isRecording get() = recorder != null
-    val isPlaying get() = player != null
+    val isRecording get() = microphone.isRecording
+    val amplitude get() = microphone.amplitude
+    var playingKey by androidx.compose.runtime.mutableStateOf<String?>(null)
+        private set
+    val isPlaying get() = playingKey != null
 
-    @Suppress("DEPRECATION")
-    fun start(file: File): Result<Unit> = runCatching {
-        check(recorder == null) { "이미 녹음 중입니다" }
-        file.parentFile?.mkdirs()
-        val next = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else MediaRecorder()
-        try {
-            next.setAudioSource(MediaRecorder.AudioSource.MIC)
-            next.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            next.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            next.setAudioEncodingBitRate(64_000)
-            next.setAudioSamplingRate(16_000)
-            next.setOutputFile(file.absolutePath)
-            next.prepare()
-            next.start()
-            recorder = next
-            recordingFile = file
-        } catch (error: Exception) {
-            next.release()
-            file.delete()
-            throw error
-        }
+    fun start(file: File): Result<Unit> {
+        stopPlayback()
+        return microphone.start(file)
     }
-
-    fun stopAndSave(): Result<File> = runCatching {
-        val active = checkNotNull(recorder) { "녹음 중이 아닙니다" }
-        recorder = null
-        val file = checkNotNull(recordingFile)
-        recordingFile = null
-        try {
-            active.stop()
-            check(file.length() > 0L) { "녹음된 소리가 없습니다" }
-            file
-        } catch (error: Exception) {
-            file.delete()
-            throw error
-        } finally {
-            active.release()
-        }
-    }
-
-    fun cancelRecording() {
-        val active = recorder ?: return
-        recorder = null
-        runCatching { active.stop() }
-        active.release()
-        recordingFile?.delete()
-        recordingFile = null
-    }
+    fun stopAndSave(): Result<File> = microphone.stopAndSave()
+    fun cancelRecording() = microphone.cancel()
 
     fun play(file: File, onDone: () -> Unit): Result<Unit> = runCatching {
         check(file.isFile) { "저장된 음성 파일이 없습니다" }
@@ -263,7 +244,9 @@ internal class LinkCarOriginalAudio(private val context: Context) {
             }
             next.prepare()
             player = next
+            next.setOnErrorListener { _, _, _ -> stopPlayback(); onDone(); true }
             next.start()
+            playingKey = file.name
         } catch (error: Exception) {
             next.release()
             abandonFocus()
@@ -274,6 +257,7 @@ internal class LinkCarOriginalAudio(private val context: Context) {
     fun stopPlayback() {
         player?.release()
         player = null
+        playingKey = null
         abandonFocus()
     }
 

@@ -277,7 +277,7 @@ internal fun ColumnScope.FigmaDriving(s: WireSession, screen: WireScreen, enable
             val bodyH = 1184f - musicHeight - (32f - 8f * (musicHeight - 200f) / 360f) - bodyY
             CompositionLocalProvider(LocalDrivingAssets provides drivingFigmaAssets.getValue(drivingFigmaNode(s, screen))) {
             Box(Modifier.size(1700.dp, 1184.dp).align(Alignment.Center).clip(RoundedCornerShape(0.dp))
-                .background(DesignedJourneyBackdrop)) {
+                .background(DesignedJourneyBackdrop).trackDrivingInteraction(s)) {
                 DHeader(s, enabled && !setupRestricted)
                 DRoute(s, screen, mapHeight, enabled, voice, onResetDemo)
                 DPanel(24, bodyY, 1022, bodyH) {
@@ -296,7 +296,9 @@ internal fun ColumnScope.FigmaDriving(s: WireSession, screen: WireScreen, enable
                         }
                     }
                 }
-                DCompanions(s, screen, feed, bodyY, bodyH, compact, enabled)
+                DCompanions(s, screen, feed, bodyY, bodyH, compact, enabled) {
+                    sendPriorityKnock(s, voice, it)
+                }
                 DMusic(s, musicHeight, musicHeight >= 300f, enabled)
                 DResizeTargets(screen, mapHeight, musicHeight, enabled, onMapDrag = { delta ->
                         mapDragging = true
@@ -328,7 +330,8 @@ internal fun ColumnScope.FigmaDriving(s: WireSession, screen: WireScreen, enable
                         color = DrivingFigma.Input, ink = DrivingFigma.Subtle)
                 }
                 DDialogs(s, enabled && !setupRestricted)
-                if (!compact && feed in setOf(DFeed.MESSAGE, DFeed.LISTENING) && !s.showSettings && !s.showEnd)
+                if (!compact && feed in setOf(DFeed.MESSAGE, DFeed.LISTENING) &&
+                    !s.showSettings && !s.showEnd && !s.showHistoryUnavailable)
                     Box(Modifier.fillMaxSize().border(6.dp, Color(0xFFC9CDD4)))
             }
             }

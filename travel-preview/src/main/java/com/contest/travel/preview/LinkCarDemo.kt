@@ -66,6 +66,10 @@ internal class WireSession {
     var motionPreview by mutableStateOf(false)
     var drivingSimulation by mutableStateOf(false)
     var pendingKnockTarget by mutableStateOf<String?>(null)
+    var knockRequestRevision by mutableIntStateOf(0)
+        private set
+    var drivingInteraction by mutableIntStateOf(0)
+    var drivingTouchActive by mutableStateOf(false)
     var demoKnockAutoAnswer by mutableStateOf(true)
     var isGuest by mutableStateOf(false)
     var guestHasPassenger by mutableStateOf(false)
@@ -108,6 +112,9 @@ internal class WireSession {
     var demoVoiceTriggered by mutableStateOf(false)
     var vote by mutableStateOf("")
     var waypoint by mutableStateOf(false)
+    var knockTimedOut by mutableStateOf(false)
+    var recordingTarget by mutableStateOf<String?>(null)
+    var recordingAttempt by mutableIntStateOf(0)
     var knockTarget by mutableStateOf("다연 차")
     var seconds by mutableIntStateOf(10)
     var incomingCaller by mutableStateOf("다연 차")
@@ -117,6 +124,9 @@ internal class WireSession {
     var settingsToggles by mutableStateOf(listOf(true, true, true, false, false))
     var showEnd by mutableStateOf(false)
     var showHistory by mutableStateOf(false)
+    var showHistoryUnavailable by mutableStateOf(false)
+    var historyNoticeRequest by mutableIntStateOf(0)
+        private set
     var message by mutableStateOf("")
     var wager by mutableStateOf(false)
     var generatedPoll by mutableStateOf<GeneratedPoll?>(null)
@@ -132,7 +142,20 @@ internal class WireSession {
     var lastNoteId by mutableStateOf<String?>(null)
 
     fun openVoiceUi() {
+        clearDrivingOverlays()
+        designPreviewNode = null
         showVoiceMenu = true
+    }
+
+    fun openHistory(restricted: Boolean) {
+        if (restricted) {
+            showHistoryUnavailable = true
+            historyNoticeRequest++
+            return
+        }
+        clearDrivingOverlays()
+        designPreviewNode = null
+        showHistory = true
     }
 
     fun open(next: WireScreen) {
@@ -174,6 +197,7 @@ internal class WireSession {
     }
     fun drive() {
         designPreviewNode = null
+        drivingIdle = true
         navigationDirection = -1
         showHistory = false
         showVoiceMenu = false
@@ -195,29 +219,65 @@ internal class WireSession {
         open(WireScreen.CALL)
     }
     fun sendKnock(target: String) {
+        clearDrivingOverlays()
+        knockTimedOut = false
         knockTarget = target
         seconds = 10
+        knockRequestRevision++
         open(WireScreen.KNOCK_SENT)
     }
     fun acceptPendingDemoKnock(): Boolean {
-        if (screen != WireScreen.KNOCK_SENT) return false
+        if (screen != WireScreen.KNOCK_SENT || seconds <= 0) return false
         startKnockCall()
         return true
     }
-    fun returnToDrivingMain() {
+    fun expirePendingKnock() {
+        if (screen != WireScreen.KNOCK_SENT || seconds > 0) return
+        knockTimedOut = true
+        open(WireScreen.VOICE_LEAVE)
+    }
+    fun beginVoiceRecording(target: String? = null) {
+        designPreviewNode = null
+        recordingTarget = target
+        recordingAttempt++
+        showVoiceMenu = false
+        speechFeedbackVisible = false
+        showVoiceRecorder = true
+    }
+    fun respondToRoadVoice(stopBy: Boolean) {
+        message = if (stopBy) "들렀다 갈게요를 선택했어요." else "그냥 갈게요를 선택했어요."
+        roadVoiceShown = false
+        if (stopBy) { waypoint = true; open(WireScreen.MAP) } else drive()
+    }
+    private fun clearDrivingOverlays() {
+        drivingIdle = true
+        showHistory = false
+        showVoiceMenu = false
+        showSettings = false
+        showEnd = false
+        showHistoryUnavailable = false
+        showPollTextEntry = false
         showVoiceRecorder = false
         speechFeedbackVisible = false
         pollDemoVisible = false
         pollDemoSpeaking = false
+        pollBusy = false
+        proposalVisible = false
+        generatedPoll = null
         roadVoiceShown = false
-        drive()
+        message = ""
+    }
+    fun returnToDrivingMain(keepExpandedPanel: Boolean = false) {
+        clearDrivingOverlays()
+        designPreviewNode = null
+        if (!keepExpandedPanel || screen !in setOf(WireScreen.MAP, WireScreen.DJ)) drive()
     }
     fun respondToProposal(accepted: Boolean) {
         vote = if (accepted) generatedPoll?.options?.firstOrNull() ?: "accepted"
             else generatedPoll?.options?.getOrNull(1) ?: "rejected"
         proposalVisible = false
         generatedPoll = null
-        drivingIdle = false
+        drivingIdle = true
         if (accepted) { waypoint = true; open(WireScreen.MAP) } else drive()
     }
     fun stepSong(delta: Int) {
@@ -247,11 +307,14 @@ internal class WireSession {
         drivingScores.reset()
         pendingKnockTarget = null
         designPreviewNode = null
+        showVoiceRecorder = false
+        showVoiceMenu = false
         drivingIdle = true
         proposalVisible = false
         showSettings = false
         showEnd = false
         showHistory = false
+        showHistoryUnavailable = false
         navigationDirection = -1
         stack.clear()
         stack.add(WireScreen.HOME)
@@ -308,9 +371,9 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
     val s = remember(previewNode, previewMotion, previewDrive) { WireSession().apply {
         applyDesignPreview(previewNode)
         demoKnockAutoAnswer = designIntent?.getBooleanExtra("knockAutoAnswer", true) != false
-        if (previewMotion) { motionPreview = true; drivingScores.reset(100, 64) }
+        if (previewMotion) { motionPreview = true; drivingScores.reset(first = 100) }
         if (previewDrive) {
-            drivingSimulation = true; designPreviewNode = null; drivingScores.reset(100, 64)
+            drivingSimulation = true; designPreviewNode = null; drivingScores.reset(first = 100)
         }
     } }
     LaunchedEffect(s, previewMotion) {
@@ -332,30 +395,47 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
         }
     }
     val live = LocalTripLive.current
-    fun startPollSpeech() {
-        s.speechFeedbackVisible = true
-        voice.startPollSpeech { transcript ->
-            s.speechFeedbackVisible = false
-            s.message = "인식: $transcript"
-            s.pollBusy = true
-        }
-    }
-    fun playDemoPollSpeech() {
-        voice.stopListening()
-        s.speechFeedbackVisible = false
-        s.pollDemoVisible = true
-        s.pollDemoSpeaking = false
-        s.message = ""
-        s.pollDemoSpeaking = voice.playDemoPollSpeech {
-            s.pollDemoSpeaking = false
-        }
-        if (!s.pollDemoSpeaking) s.message = voice.status
-    }
+    fun startPollSpeech() { s.beginVoiceRecording("모두에게") }
+    var requestingMicPermission by remember { mutableStateOf(false) }
+    var microphoneAskedAttempt by remember { mutableIntStateOf(-1) }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startPollSpeech() else {
-            s.message = "마이크 권한이 거부되어 음성 녹음은 사용할 수 없어요."
-            s.speechFeedbackVisible = false
+        requestingMicPermission = false
+        if (granted && s.showVoiceRecorder) voice.startRecording()
+        else if (!granted) s.message = "마이크 권한이 필요해요. 허용한 뒤 다시 시도해 주세요."
+    }
+    LaunchedEffect(s.showVoiceRecorder, s.recordingAttempt, foreground) {
+        if (!s.showVoiceRecorder || (!foreground && !requestingMicPermission)) {
+            if (voice.isRecording) voice.cancelRecording()
+            if (!foreground && !requestingMicPermission) s.showVoiceRecorder = false
+        } else if (foreground && !voice.isRecording && !requestingMicPermission) {
+            s.message = ""
+            if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                voice.startRecording()
+            else if (setupRestricted) s.message = "마이크 권한이 필요해요. 정차한 뒤 허용해 주세요."
+            else if (microphoneAskedAttempt != s.recordingAttempt) {
+                microphoneAskedAttempt = s.recordingAttempt
+                requestingMicPermission = true
+                micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            }
         }
+    }
+    LaunchedEffect(s.showVoiceRecorder, voice.isRecording) {
+        if (s.showVoiceRecorder && voice.isRecording) {
+            delay(60_000)
+            finishVoiceRecording(s, voice)
+        }
+    }
+    LaunchedEffect(s.speechFeedbackVisible, voice.isListening) {
+        if (s.speechFeedbackVisible && voice.isListening) {
+            delay(12_000)
+            if (voice.isListening) {
+                voice.stopListening()
+                s.message = "녹음은 저장됐어요. 음성 인식을 사용할 수 없어 글자로 안건을 입력할 수 있어요."
+            }
+        }
+    }
+    LaunchedEffect(s.speechFeedbackVisible, s.screen.isDriving) {
+        if (!s.speechFeedbackVisible || !s.screen.isDriving) voice.stopListening()
     }
     DisposableEffect(voice) { onDispose { voice.release() } }
     DisposableEffect(voice, s.pollDemoVisible) {
@@ -366,15 +446,17 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
     LaunchedEffect(naviPoint) { voice.updateFallbackPoint(naviPoint) }
     LaunchedEffect(foreground) { if (foreground) voice.startLocation() else voice.release() }
     val convoy by rememberUpdatedState(LocalConvoy.current)
-    LaunchedEffect(convoy.dayeonScore, convoy.munjunScore, s.drivingSimulation,
-        s.designPreviewNode) {
+    LaunchedEffect(convoy.dayeonScore, convoy.munjunScore, convoy.dayeonEvent?.id,
+        convoy.munjunEvent?.id, convoy.revision, s.drivingSimulation, s.designPreviewNode) {
         if (!s.drivingSimulation && s.designPreviewNode == null) {
-            s.drivingScores.showConvoyScores(convoy.dayeonScore, convoy.munjunScore)
+            s.drivingScores.showConvoyScores(convoy.dayeonScore, convoy.munjunScore,
+                convoy.revision, convoy.dayeonEvent, convoy.munjunEvent)
         }
     }
     val vehicleMotion = LocalVehicleMotion.current
     val penaltyDetector = remember(s) { DrivingPenaltyDetector() }
     val screen = s.screen
+    DrivingIdleReturn(s, voice, foreground)
     LaunchedEffect(vehicleMotion.sampleId, vehicleMotion.gear, vehicleMotion.error,
         foreground, s.drivingSimulation, screen.isDriving) {
         if (!s.drivingSimulation || !foreground || !screen.isDriving) penaltyDetector.reset()
@@ -387,17 +469,26 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
         }
     }
     BackHandler {
-        if (s.showEnd) s.showEnd = false
+        if (s.showHistoryUnavailable) s.showHistoryUnavailable = false
+        else if (s.showEnd) s.showEnd = false
         else if (s.showSettings) s.showSettings = false
-        else if (s.showHistory) s.showHistory = false
-        else if (s.showVoiceRecorder) s.showVoiceRecorder = false
-        else if (s.showVoiceMenu) s.showVoiceMenu = false
+        else if (s.showHistory) { s.returnToDrivingMain(); voice.audio.stopPlayback() }
+        else if (s.showVoiceRecorder) s.returnToDrivingMain()
+        else if (s.showVoiceMenu) s.returnToDrivingMain()
+        else if (s.speechFeedbackVisible) { s.returnToDrivingMain(); voice.stopListening() }
         else if (s.pollDemoVisible) {
             voice.audio.stopPlayback()
             s.pollDemoSpeaking = false
             s.pollDemoVisible = false
         }
         else if (screen == WireScreen.HOME) onExit() else s.back()
+    }
+
+    LaunchedEffect(s, s.showHistoryUnavailable, s.historyNoticeRequest, foreground,
+        setupRestricted, screen.isDriving) {
+        if (!s.showHistoryUnavailable) return@LaunchedEffect
+        if (foreground && setupRestricted && screen.isDriving) delay(2_200)
+        s.showHistoryUnavailable = false
     }
 
     LaunchedEffect(setupRestricted) {
@@ -417,12 +508,20 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
         }
     }
 
-    LaunchedEffect(screen, s.designPreviewNode) {
+    LaunchedEffect(screen, s.designPreviewNode, s.knockRequestRevision) {
         if (s.designPreviewNode != null) return@LaunchedEffect
         when (screen) {
             WireScreen.KNOCK_SENT -> {
                 s.seconds = 10
-                repeat(10) { delay(1_000); s.seconds-- }
+                repeat(10) {
+                    delay(1_000); s.seconds--
+                    if (s.demoKnockAutoAnswer && s.knockTarget == "다연 차" && s.seconds == 7 &&
+                        !convoy.useRealCar) {
+                        s.acceptPendingDemoKnock()
+                        return@LaunchedEffect
+                    }
+                }
+                s.expirePendingKnock()
             }
             WireScreen.KNOCK_RECEIVED, WireScreen.KNOCK_FULL -> {
                 s.seconds = 10
@@ -447,7 +546,9 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
             else -> Unit
         }
     }
-    LaunchedEffect(screen.isDriving, convoy.distanceMeters, foreground, voice.notes.hasDemoMarker, s.designPreviewNode) {
+    val currentFeed = drivingFeed(s, screen)
+    LaunchedEffect(screen.isDriving, convoy.distanceMeters, foreground, voice.notes.hasDemoMarker,
+        s.designPreviewNode, currentFeed) {
         if (s.designPreviewNode != null) return@LaunchedEffect
         if (!screen.isDriving) {
             s.tripMotionStarted = false
@@ -462,7 +563,8 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
         }
         s.progress = demoVisualProgress(convoy.distanceMeters)
         if (foreground && !s.demoVoiceTriggered && voice.notes.hasDemoMarker &&
-            convoy.distanceMeters >= 200.0 && !voice.audio.isPlaying) {
+            convoy.distanceMeters >= 200.0 && !voice.audio.isPlaying &&
+            currentFeed in setOf(DFeed.IDLE, DFeed.MESSAGE)) {
             if (voice.playDemoMarker {}) {
                 s.demoVoiceTriggered = true
                 s.roadVoiceShown = true
@@ -503,13 +605,7 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
                             s.message = "출발 지점으로 돌아갔어요."
                             s.drive()
                         }, onPollSpeech = {
-                        if (!convoy.useRealCar) playDemoPollSpeech()
-                        else if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
-                            PackageManager.PERMISSION_GRANTED) startPollSpeech()
-                        else if (setupRestricted) {
-                            s.message = "마이크 권한이 필요해요. 정차한 뒤 허용해 주세요."
-                            s.speechFeedbackVisible = false
-                        } else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                        startPollSpeech()
                     }, onVoiceClick = {
                         if (s.screen != WireScreen.DRIVE) s.drive()
                         s.openVoiceUi()
@@ -532,7 +628,7 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
                     else if (setupRestricted) s.message = "마이크 권한이 필요해요. 정차한 뒤 허용해 주세요."
                     else micPermission.launch(Manifest.permission.RECORD_AUDIO)
                 }) { Text("투표 안건 말하기") }
-                TextButton(onClick = { s.showVoiceMenu = false; s.showVoiceRecorder = true }) {
+                TextButton(onClick = { s.beginVoiceRecording() }) {
                     Text("길에 음성 남기기")
                 }
             }
@@ -557,7 +653,7 @@ internal fun LinkCarDemoScreen(wide: Boolean, enabled: Boolean, setupRestricted:
             voice.stopListening()
             val result = withContext(Dispatchers.IO) { PollBridge.generate(transcript) }
             s.pollBusy = false
-            result.onSuccess { s.generatedPoll = it; s.vote = ""; s.message = "AI가 투표 안건을 만들었어요." }
+            result.onSuccess { s.speechFeedbackVisible = false; s.generatedPoll = it; s.vote = ""; s.message = "AI가 투표 안건을 만들었어요." }
                 .onFailure {
                     s.message = if (it is ConnectException)
                         "투표 생성 실패: PC에서 OpenAI 브리지(tools/openai_poll_bridge.py)를 실행해 주세요."

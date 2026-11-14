@@ -149,9 +149,9 @@ internal fun DRoute(s: WireSession, screen: WireScreen, height: Float, enabled: 
 
 @Composable
 internal fun DCompanions(s: WireSession, screen: WireScreen, feed: DFeed, y: Float,
-    height: Float, compact: Boolean, enabled: Boolean) {
+    height: Float, compact: Boolean, enabled: Boolean, onKnock: (String) -> Unit) {
     DPanel(1062, y, 614, height) {
-        if (compact) DCompactCars(s, screen, height, enabled)
+        if (compact) DCompactCars(s, screen, height, enabled, onKnock)
         else {
             if (feed == DFeed.ROAD_DELIVER) DPanel(16, 84, 582, 258, 40, Color(0xFFEEF0FF),
                 Modifier.border(2.dp, DrivingFigma.Mid, RoundedCornerShape(40.dp)))
@@ -161,20 +161,19 @@ internal fun DCompanions(s: WireSession, screen: WireScreen, feed: DFeed, y: Flo
                 -35, -14, 126, 84, alpha = .2f)
             DLine(drivingAsset("imgVector3", R.drawable.driving_b3144), 24, 358, 566)
             listOf("다연 차", "문준 차").forEachIndexed { index, name ->
-                val motion = rememberCompanionButtonMotion(s, name)
+                val motion = rememberCompanionButtonMotion(s, name, onKnock)
                 val offset = index * 292
                 val target = when (feed) { DFeed.CALL -> s.incomingCaller; DFeed.INCOMING -> s.incomingCaller; else -> s.knockTarget }
                 val active = name == target && feed in setOf(DFeed.SENT, DFeed.INCOMING, DFeed.CALL, DFeed.RECEIVED)
-                val running = s.designPreviewNode == null || index == 0 ||
-                    (feed == DFeed.SENT && name == target)
+                val running = companionIsDriving(name, LocalConvoy.current.speedKph, s.designPreviewNode != null,
+                    feed == DFeed.SENT && name == target)
                 val ring = if (active && feed == DFeed.SENT) DrivingFigma.Mid
                     else if (active) DrivingFigma.Mid else DrivingFigma.Input
                 val photo = if (index == 0) drivingCompanionImage(s, name, "imgProfilePhotoCompanion1", R.drawable.driving_03d8c)
                     else drivingCompanionImage(s, name, "imgImage46", drivingAsset("imgImage45", R.drawable.driving_6cab5))
                 DImage(photo, 40, 103 + offset, 90, 90,
                     Modifier.clip(RoundedCornerShape(1000.dp)), scale = ContentScale.Crop)
-                DImage(drivingAsset(if (index == 0) "imgEllipse5" else "imgEllipse6",
-                    if (running) R.drawable.driving_f426a else R.drawable.driving_b4198),
+                DImage(if (running) R.drawable.driving_f426a else R.drawable.driving_b4198,
                     102, 155 + offset, 38, 38)
                 DText(name, 149, 118 + offset, DType.Name)
                 DText(if (feed == DFeed.ROAD_DELIVER && index == 0) "음성 남김 · 12분 전"
@@ -190,7 +189,9 @@ internal fun DCompanions(s: WireSession, screen: WireScreen, feed: DFeed, y: Flo
                 DText("목적지까지", 177, 285 + offset, DType.Tiny, DrivingFigma.Hint, 90, TextAlign.Center)
                 DLine(drivingAsset(if (index == 0) "imgLine5" else "imgLine6", R.drawable.driving_489dd),
                     161, 222 + offset, if (index == 0) 53 else 47, vertical = true)
-                val buttonColor = if (active && feed != DFeed.SENT) DrivingFigma.Blue
+                val knocking = active && feed == DFeed.SENT && motion.busy
+                val buttonColor = if (knocking) DrivingFigma.Black
+                    else if (active && feed != DFeed.SENT) DrivingFigma.Blue
                     else if (active) Color.White else if (running) DrivingFigma.Black else DrivingFigma.Input
                 DPanel(340, 93 + offset, 240, 240, 132, Color.Transparent,
                     motion.buttonModifier.border(if (active && feed != DFeed.SENT) 6.dp else 3.dp, ring, RoundedCornerShape(132.dp))
@@ -201,6 +202,8 @@ internal fun DCompanions(s: WireSession, screen: WireScreen, feed: DFeed, y: Flo
                     DPanel(10, 10, 220, 220, 132, buttonColor,
                         if (active && feed == DFeed.SENT) Modifier.border(6.dp, DrivingFigma.Blue, RoundedCornerShape(132.dp)) else Modifier)
                     when {
+                        knocking -> DCrop(R.drawable.driving_c4443, 79, 78, 81, 84,
+                            -4.76, 13.22, 90.49, 63.05, modifier = motion.iconModifier)
                         active && feed == DFeed.CALL -> {
                             DText(s.seconds.toString(), 0, 48, DType.CallBadge, Color.White, 240, TextAlign.Center)
                             DText("대화 중", 0, 135, DType.Eyebrow, Color.White, 240, TextAlign.Center)
@@ -217,7 +220,7 @@ internal fun DCompanions(s: WireSession, screen: WireScreen, feed: DFeed, y: Flo
                             DImage(R.drawable.driving_9304f, 90, 62, 60, 62, scale = ContentScale.Crop)
                             DText("노크 왔어요", 20, 138, DType.Eyebrow, Color.White, 200, TextAlign.Center)
                         }
-                        feed == DFeed.UNAVAILABLE && name == s.knockTarget -> {
+                        feed == DFeed.UNAVAILABLE && name == s.knockTarget && !s.knockTimedOut -> {
                             DImage(drivingAsset("imgIcon", R.drawable.driving_affb4), 98, 56, 44, 44)
                             DText("1분 뒤\n다시 노크", 20, 118, DType.Eyebrow, DrivingFigma.Disabled, 200, TextAlign.Center, 2)
                         }
@@ -263,12 +266,13 @@ private fun DPercentPath(id: Int, t: Float, r: Float, b: Float, l: Float,
 }
 
 @Composable
-private fun DCompactCars(s: WireSession, screen: WireScreen, height: Float, enabled: Boolean) {
+private fun DCompactCars(s: WireSession, screen: WireScreen, height: Float, enabled: Boolean,
+    onKnock: (String) -> Unit) {
     val extra by animateFloatAsState(if (screen == WireScreen.DJ) 10.5f else 0f, tween(340), label = "compactCarInset")
     val step by animateFloatAsState(if (screen == WireScreen.DJ) 140f else 119f, tween(340), label = "compactCarSpacing")
     listOf("다연 차", "문준 차").forEachIndexed { i, name ->
-        val motion = rememberCompanionButtonMotion(s, name)
-        val running = s.designPreviewNode == null || i == 0
+        val motion = rememberCompanionButtonMotion(s, name, onKnock)
+        val running = companionIsDriving(name, LocalConvoy.current.speedKph, s.designPreviewNode != null)
         val y = 15.5f + i * step + extra
         DImage(drivingCompanionImage(s, name, if (i == 0) "imgAvatar1" else "imgAvatar2",
             if (i == 0) R.drawable.driving_52fa2 else R.drawable.driving_08ff1), 28, y + 18, 76, 76)

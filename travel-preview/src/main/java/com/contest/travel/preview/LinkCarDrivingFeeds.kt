@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -18,10 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -37,19 +40,18 @@ internal fun DFeedContent(s: WireSession, feed: DFeed, compact: Boolean, height:
     onVoiceClick: () -> Unit, onPollSpeech: () -> Unit) {
     if (feed == DFeed.HISTORY) { DHistory(s, enabled && !setupRestricted, voice); return }
     if (compact) {
-        DCompactFeedContent(s, feed, height, enabled && !setupRestricted, voice,
+        DCompactFeedContent(s, feed, height, enabled, voice,
             onVoiceClick, onPollSpeech)
         return
     }
     DText("음성 연결", 49, 34, DType.Eyebrow, DrivingFigma.Muted)
     if (s.pollDemoVisible || feed in setOf(DFeed.MENU, DFeed.UNAVAILABLE, DFeed.RECEIVED,
-            DFeed.ROAD_NEAR, DFeed.ROAD_DELIVER, DFeed.RECORDING, DFeed.CALL_DECLINED))
+            DFeed.ROAD_NEAR, DFeed.ROAD_DELIVER, DFeed.RECORDING, DFeed.CALL_DECLINED, DFeed.LISTENING))
         DDrivingBack(s, enabled)
     fun leavePreview() { s.designPreviewNode = null }
-    val historyEnabled = enabled && !setupRestricted
     if (feed in setOf(DFeed.IDLE, DFeed.MESSAGE, DFeed.LISTENING, DFeed.MENU, DFeed.ROAD_NEAR))
         DChip("이전 대화", if (feed == DFeed.IDLE) 893 else 860, 30, 99,
-            onClick = if (historyEnabled) ({ leavePreview(); s.showHistory = true }) else null)
+            onClick = if (enabled) ({ s.openHistory(setupRestricted) }) else null)
     when (feed) {
         DFeed.IDLE -> {
             DImage(drivingAsset("imgImage49", R.drawable.driving_70aaa), 447, 201, 111, 116)
@@ -59,9 +61,8 @@ internal fun DFeedContent(s: WireSession, feed: DFeed, compact: Boolean, height:
         DFeed.MESSAGE, DFeed.ROAD_NEAR -> {
             DImage(drivingAsset("imgFrame1707487204", R.drawable.driving_1652f), 1, 169, 1021, 265)
             DVoiceHeader(if (feed == DFeed.ROAD_NEAR) 289 else 303, 153,
-                if (feed == DFeed.ROAD_NEAR) "문준 차 · 3분 전" else "다연 차 방금",
-                drivingCompanionImage(s, if (feed == DFeed.ROAD_NEAR) "문준 차" else "다연 차",
-                    "imgAvatar", R.drawable.driving_55f82), width = if (feed == DFeed.ROAD_NEAR) 446 else 416)
+                if (feed == DFeed.ROAD_NEAR) "문준 차 · 3분 전" else "문준 차 방금",
+                R.drawable.driving_1491e, width = if (feed == DFeed.ROAD_NEAR) 446 else 416)
             DText(dAccent("이 ", "노래", " 누가 신청했어? 좋다"), 0, 253,
                 DType.Headline, w = 1022, align = TextAlign.Center)
             if (feed == DFeed.MESSAGE) DText("제안이 오면 좋아 · 다음에 버튼이 함께 나타나요", 0, 345,
@@ -78,10 +79,11 @@ internal fun DFeedContent(s: WireSession, feed: DFeed, compact: Boolean, height:
                         if (i == 0) Color(0xFF44464E) else Color(0xFF7583EE),
                         Modifier.linkCarPress(enabled) {
                             leavePreview(); s.showVoiceMenu = false
-                            if (i == 0) onPollSpeech() else s.showVoiceRecorder = true
+                            if (i == 0) onPollSpeech() else s.beginVoiceRecording()
                         }) {
                         DImage(drivingAsset(if (i == 0) "imgGroup" else "imgGroup1707486540",
-                            if (i == 0) R.drawable.driving_00832 else R.drawable.driving_38ba7), 168, 54, 64, 64)
+                            if (i == 0) R.drawable.driving_00832 else R.drawable.driving_38ba7), 168, 48, 64, 76,
+                            scale = androidx.compose.ui.layout.ContentScale.Fit)
                         DText(title, 0, 135, DType.Choice, Color.White, 400, TextAlign.Center)
                     }
                 }
@@ -89,24 +91,24 @@ internal fun DFeedContent(s: WireSession, feed: DFeed, compact: Boolean, height:
         }
         DFeed.LISTENING -> {
             DImage(drivingAsset("imgFrame1707487204", R.drawable.driving_1652f), 1, 169, 1021, 265)
-            DVoiceHeader(if (s.pollDemoVisible) 303 else 346, 153, "본인",
+            DVoiceHeader(303, 153, "본인",
                 drivingCompanionImage(s, "나", "imgAvatar", R.drawable.driving_60416),
-                if (s.pollDemoVisible) if (s.pollDemoSpeaking) "말하는 중..." else "말하기 완료" else "듣는중...",
-                if (s.pollDemoVisible) 416 else 332)
-            val transcript = if (s.pollDemoVisible) "아 배고프다 휴게소 들리면 안되나 나 밥 먹고 가고 싶은데"
-                else if (s.designPreviewNode != null) "아 배고프다 휴게소 들리면 안되나 밥 먹고 가고 싶은데"
-                else if (s.pollBusy) "AI가 투표 안건을 만들고 있어요"
-                else if (s.message.startsWith("인식: ")) s.message.removePrefix("인식: ") else voice.status
-            DText(transcript, 127.5, 253, DType.Headline, DrivingFigma.ScoreBlue, 769, TextAlign.Center, 4)
-            DSpeakButton(s, enabled, {
-                voice.stopListening()
-                if (s.pollDemoVisible) voice.audio.stopPlayback()
-                s.pollDemoVisible = false; s.pollDemoSpeaking = false; s.speechFeedbackVisible = false
-            }, pale = true)
-            if (s.designPreviewNode == null && (voice.status.contains("오류") || voice.status.contains("실패"))) {
-                DChip("텍스트로 입력", 720, 468, 245, onClick = if (enabled && !setupRestricted) ({ s.showPollTextEntry = true }) else null)
+                if (voice.isListening) "확인하는 중" else "녹음 완료", 416)
+            val transcript = if (s.designPreviewNode != null) "아 배고프다 휴게소 들리면 안되나 밥 먹고 가고 싶은데"
+                else if (s.pollBusy) "투표 안건을 만들고 있어요"
+                else if (s.message.startsWith("인식: ")) s.message.removePrefix("인식: ")
+                else if (voice.isListening) "녹음한 말을 확인하고 있어요"
+                else "내 목소리를 저장했어요"
+            DText(transcript, 127.5, 253, DType.Headline, DrivingFigma.ScoreBlue, 769, TextAlign.Center, 3)
+            if (!voice.isListening && !s.pollBusy && s.designPreviewNode == null)
+                DChip("안건 글자로 입력", 720, 458, 245,
+                    onClick = if (enabled && !setupRestricted) ({ s.showPollTextEntry = true }) else null)
+            DButton("녹음한 목소리 듣기", 16, 521, 990, enabled = enabled,
+                icon = R.drawable.driving_5c717) {
+                voice.notes.notes.lastOrNull { it.id == s.lastNoteId }?.let { voice.play(it) }
             }
         }
+
         DFeed.PROPOSAL -> {
             DImage(drivingAsset("imgFrame1707487204", R.drawable.driving_1652f), 1, 169, 1021, 265)
             DVoiceHeader(294, 153, avatar = drivingCompanionImage(s, "다연 차", "imgAvatar", R.drawable.driving_39ac5), width = 406)
@@ -190,13 +192,14 @@ internal fun DFeedContent(s: WireSession, feed: DFeed, compact: Boolean, height:
         }
         DFeed.UNAVAILABLE -> {
             DImage(drivingCompanionImage(s, s.knockTarget, "imgAvatar", R.drawable.driving_1491e), 451, 96, 120, 120)
-            DChip(if (s.designPreviewNode == null && s.knockTarget == "다연 차") "응답 없음" else "휴게소 정차 중", 444, 232, 134)
-            DText(buildUnavailable(s.knockTarget), 0, 290, DType.Strong, w = 1022, align = TextAlign.Center)
-            DText("음성 메시지를 남기면 ${s.knockTarget} 화면에 글자로 먼저 보여요", 0, 376,
+            DChip(if (s.knockTimedOut) "응답 없음" else "휴게소 정차 중", 444, 232, 134)
+            DText(buildUnavailable(s.knockTarget, s.knockTimedOut), 0, 290, DType.Strong, w = 1022, align = TextAlign.Center)
+            DText(if (s.knockTimedOut) "음성 메시지를 남겨보세요"
+                else "음성 메시지를 남기면 ${s.knockTarget} 화면에 글자로 먼저 보여요", 0, 376,
                 DType.Descriptive, DrivingFigma.Disabled, 1022, TextAlign.Center)
             DButton("음성 메시지 남기기", 16, 521, 990, enabled = enabled,
                 icon = drivingAsset("imgIconMic", R.drawable.driving_88021)) {
-                leavePreview(); s.showVoiceRecorder = true
+                leavePreview(); s.beginVoiceRecording(s.knockTarget)
             }
             DImage(drivingAsset("imgEllipse13", R.drawable.driving_29f9a), 521, 78, 56, 56)
             DImage(drivingAsset("imgIconX", R.drawable.driving_db67b), 531, 88, 36, 36)
@@ -228,19 +231,12 @@ internal fun DFeedContent(s: WireSession, feed: DFeed, compact: Boolean, height:
                 DText("오른쪽 · 3km 앞 · 다연 차가 남긴 위치", 96, 52, DType.Small, DrivingFigma.Hint)
             }
             DButton("그냥 갈게요", 16, 521, 400, enabled = enabled,
-                color = DrivingFigma.Input, ink = DrivingFigma.Disabled) { s.roadVoiceShown = false; s.drive() }
+                color = DrivingFigma.Input, ink = DrivingFigma.Disabled) { s.respondToRoadVoice(false) }
             DButton("들렀다 갈게요", 432, 521, 574, enabled = enabled) {
-                leavePreview(); s.waypoint = true; s.roadVoiceShown = false; s.open(WireScreen.MAP)
+                leavePreview(); s.respondToRoadVoice(true)
             }
         }
-        DFeed.RECORDING -> {
-            Box(Modifier.dBounds(0, 80, 1022, 560)) {
-                DesignedRoadVoiceRecorderCard(Modifier.fillMaxSize()) {
-                    s.showVoiceRecorder = false
-                    s.message = "녹음 시연을 마쳤어요. 음성 파일은 저장되지 않았어요."
-                }
-            }
-        }
+        DFeed.RECORDING -> DRecordingContent(s, voice, false, height, enabled)
         DFeed.CALL_DECLINED -> {
             DText("${s.incomingCaller}의 전화를 거절했어요", 40, 260, DType.Strong, w = 942, align = TextAlign.Center)
             DText("잠시 후 주행 화면으로 돌아가요", 40, 350, DType.Description,
@@ -264,7 +260,7 @@ private fun DCompactFeedContent(s: WireSession, feed: DFeed, height: Float, enab
                 type = DType.Meta, onClick = onVoiceClick)
         }
         DFeed.MESSAGE, DFeed.ROAD_NEAR -> {
-            val person = if (feed == DFeed.ROAD_NEAR) "문준 차 · 3분 전" else "다연 차 방금"
+            val person = if (feed == DFeed.ROAD_NEAR) "문준 차 · 3분 전" else "문준 차 방금"
             DText(person, 48, 76, DType.Meta, DrivingFigma.Subtle)
             DText(dAccent("이 ", "노래", " 누가 신청했어? 좋다"), 48, 111,
                 DType.Description, w = 570, lines = 2)
@@ -301,14 +297,14 @@ private fun DCompactFeedContent(s: WireSession, feed: DFeed, height: Float, enab
             DChip("GU 편의점 청평점", 650, 100, 344, 44)
             DButton("그냥 갈게요", 650, actionY, 160, 72, enabled = enabled,
                 color = DrivingFigma.Input, ink = DrivingFigma.Disabled,
-                type = DType.Meta) { s.roadVoiceShown = false; s.drive() }
+                type = DType.Meta) { s.respondToRoadVoice(false) }
             DButton("들렀다 갈게요", 824, actionY, 170, 72, enabled = enabled,
                 type = DType.Meta) {
-                s.waypoint = true; s.roadVoiceShown = false; s.open(WireScreen.MAP)
+                s.respondToRoadVoice(true)
             }
         }
         DFeed.LISTENING -> {
-            DText("듣는 중", 48, 76, DType.Meta, DrivingFigma.Subtle)
+            DText(if (voice.isListening) "녹음한 말 확인 중" else "녹음 완료", 48, 76, DType.Meta, DrivingFigma.Subtle)
             val transcript = if (s.pollBusy) "AI가 투표 안건을 만들고 있어요"
                 else if (s.message.startsWith("인식: ")) s.message.removePrefix("인식: ")
                 else voice.status
@@ -324,7 +320,7 @@ private fun DCompactFeedContent(s: WireSession, feed: DFeed, height: Float, enab
             DButton("투표 안건 말하기", 560, actionY, 210, 72, enabled = enabled,
                 type = DType.Meta) { s.showVoiceMenu = false; onPollSpeech() }
             DButton("길에 음성 남기기", 784, actionY, 210, 72, enabled = enabled,
-                type = DType.Meta) { s.showVoiceMenu = false; s.showVoiceRecorder = true }
+                type = DType.Meta) { s.beginVoiceRecording() }
         }
         DFeed.SENT -> {
             DText("${s.knockTarget}를 노크했어요 · ${s.seconds}초", 48, 111,
@@ -357,25 +353,22 @@ private fun DCompactFeedContent(s: WireSession, feed: DFeed, height: Float, enab
                 type = DType.Meta) { DPlayNote(s, voice) }
         }
         DFeed.UNAVAILABLE -> {
-            DText("${s.knockTarget}가 지금은 문을 못 열어요", 48, 111,
+            DText(buildUnavailable(s.knockTarget, s.knockTimedOut), 48, 96,
                 DType.Description, w = 570, lines = 2)
+            DText("음성 메시지를 남겨보세요", 48, 172, DType.Meta, DrivingFigma.Subtle)
             DButton("음성 메시지 남기기", 650, actionY, 344, 72, enabled = enabled,
-                type = DType.Meta) { s.showVoiceRecorder = true }
+                type = DType.Meta) { s.beginVoiceRecording(s.knockTarget) }
         }
-        DFeed.RECORDING -> {
-            DText("길에 음성 남기는 중", 48, 111, DType.Description, w = 570)
-            DButton("완료", 650, actionY, 344, 72, enabled = enabled,
-                type = DType.Meta) { s.showVoiceRecorder = false }
-        }
+        DFeed.RECORDING -> DRecordingContent(s, voice, true, height, enabled)
         DFeed.CALL_DECLINED -> DText("${s.incomingCaller}의 전화를 거절했어요", 48, 111,
             DType.Description, w = 900)
         DFeed.HISTORY -> Unit
     }
 }
 
-private fun buildUnavailable(name: String) = androidx.compose.ui.text.buildAnnotatedString {
+private fun buildUnavailable(name: String, timedOut: Boolean) = androidx.compose.ui.text.buildAnnotatedString {
     withStyle(androidx.compose.ui.text.SpanStyle(color = DrivingFigma.Red)) { append(name) }
-    append("가 지금은 문을 못 열어요")
+    append(if (timedOut) "가 노크를 받지 못했어요" else "가 지금은 문을 못 열어요")
 }
 
 private fun DPlayNote(s: WireSession, voice: LinkCarVoiceRuntime) {
@@ -410,8 +403,11 @@ private fun DHistory(s: WireSession, enabled: Boolean, voice: LinkCarVoiceRuntim
         DImage(drivingCompanionImage(s, when (i) { 0, 2 -> "다연 차"; 1 -> "문준 차"; else -> "나" },
             when (i) { 0, 2 -> "imgAvatar"; 1 -> "imgAvatar1"; else -> "imgAvatar2" },
             R.drawable.driving_cd7ef), 40, 116 + y, 72, 72)
-        DText(times[i], 136, 112 + y, DType.Label, Color(0xFF9398A5))
-        DText(messages[i], 136, 142 + y, DType.Body)
+        val myNote = voice.notes.notes.lastOrNull()
+        val minutes = myNote?.let { ((System.currentTimeMillis() - it.createdAt) / 60_000).coerceAtLeast(0) }
+        DText(if (i == 3 && myNote != null) "나 · ${if (minutes == 0L) "방금" else "${minutes}분 전"}"
+            else times[i], 136, 112 + y, DType.Label, Color(0xFF9398A5))
+        DText(if (i == 3 && myNote != null) "내가 남긴 음성" else messages[i], 136, 142 + y, DType.Body)
         if (i < 3) DPanel(40, 224 + y, 950, 2, 0, Color(0xFFEEEFF2))
         when (i) {
             0 -> DChip("제안 · 좋아 3/3", 848, 134, 142, color = DrivingFigma.Blue, ink = Color.White)
@@ -420,11 +416,28 @@ private fun DHistory(s: WireSession, enabled: Boolean, voice: LinkCarVoiceRuntim
                     134 + y, if (i == 1) 66 else 136, color = if (i == 1) DrivingFigma.Input else DrivingFigma.Pale,
                     ink = if (i == 1) DrivingFigma.Subtle else DrivingFigma.Blue)
                 DPanel(902, 116 + y, 88, 88, 100, DrivingFigma.Black,
-                    Modifier.linkCarPress(enabled) { DPlayNote(s, voice) }) {
-                    DImage(drivingAsset("imgIcon", R.drawable.driving_5c717), 28, 28, 32, 32)
+                    Modifier.semantics { contentDescription = if (i == 1) "문준 차 원본 음성 재생" else "다연 차 길 음성 재생" }
+                        .linkCarPress(enabled) {
+                            if (i == 1) voice.playMunjunHistory() else voice.playRoadHistory()
+                            s.message = voice.status
+                        }) {
+                    val playing = voice.audio.playingKey == if (i == 1) "munjun_song_message.m4a" else DayeonRoadVoiceAsset
+                    if (playing) {
+                        DPanel(31, 28, 8, 32, 2, Color.White)
+                        DPanel(49, 28, 8, 32, 2, Color.White)
+                    } else DImage(R.drawable.driving_5c717, 28, 28, 32, 32)
                 }
             }
-            else -> DChip("모두에게", 895, 542, 95)
+            else -> if (myNote == null) DChip("모두에게", 895, 542, 95) else {
+                DPanel(902, 116 + y, 88, 88, 100, DrivingFigma.Black,
+                    Modifier.semantics { contentDescription = "내가 녹음한 원본 음성 재생" }
+                        .linkCarPress(enabled) { voice.play(myNote); s.message = voice.status }) {
+                    if (voice.audio.playingKey == myNote.fileName) {
+                        DPanel(31, 28, 8, 32, 2, Color.White)
+                        DPanel(49, 28, 8, 32, 2, Color.White)
+                    } else DImage(R.drawable.driving_5c717, 28, 28, 32, 32)
+                }
+            }
         }
     }
 }
@@ -440,10 +453,13 @@ private fun DDrivingBack(s: WireSession, enabled: Boolean) {
 
 @Composable
 internal fun DDialogs(s: WireSession, enabled: Boolean) {
-    val open = s.showSettings || s.showEnd
+    val open = s.showSettings || s.showEnd || s.showHistoryUnavailable
     AnimatedVisibility(open, enter = fadeIn(tween(180)), exit = fadeOut(tween(140))) {
         DPanel(0, 0, 1700, 1184, 0, Color(0xFF0D0E12).copy(alpha = .45f), Modifier.pointerInput(enabled) {
-            detectTapGestures { if (enabled) { s.showSettings = false; s.showEnd = false } }
+            detectTapGestures {
+                if (s.showHistoryUnavailable) s.showHistoryUnavailable = false
+                else if (enabled) { s.showSettings = false; s.showEnd = false }
+            }
         })
     }
     AnimatedVisibility(s.showSettings, Modifier.dBounds(350, 122, 1000, 940),
@@ -497,6 +513,21 @@ internal fun DDialogs(s: WireSession, enabled: Boolean) {
             DButton("동행 종료", 432, 394, 400, enabled = enabled) {
                 s.home()
             }
+        }
+    }
+    AnimatedVisibility(s.showHistoryUnavailable, Modifier.dBounds(426, 368, 848, 448),
+        enter = fadeIn(tween(200)) + scaleIn(tween(240), initialScale = .97f),
+        exit = fadeOut(tween(140)) + scaleOut(tween(160), targetScale = .98f)) {
+        DPanel(0, 0, 848, 448, 56, Color.White,
+            Modifier.pointerInput(Unit) { detectTapGestures {} }) {
+            DPanel(364, 56, 120, 120, 60, Color(0xFFFF5F5F)) {
+                Image(painterResource(R.drawable.driving_8e0b4), null,
+                    Modifier.dBounds(32, 32, 56, 56), colorFilter = ColorFilter.tint(Color.White))
+            }
+            DText("이전 대화는 주행 중에\n사용할 수 없어요", 16, 212, DType.ModalTitle,
+                w = 816, align = TextAlign.Center, lines = 2)
+            DText("정차 후 다시 확인해 주세요", 16, 354, DType.ModalSub,
+                Color(0xFF9398A5), 816, TextAlign.Center)
         }
     }
 }
